@@ -1,0 +1,620 @@
+---
+title: 'Code Style & Best Practices'
+description: 'Code style conventions and best practices for the Flutter Billing App'
+icon: 'paintbrush'
+---
+
+## Overview
+
+This guide outlines the code style conventions, naming patterns, and best practices used throughout the Flutter Billing App codebase.
+
+<Info>
+  The project uses `flutter_lints` for static analysis. Run `flutter analyze` to check for style violations.
+</Info>
+
+## Linting Configuration
+
+The project follows Flutter's recommended lints defined in `analysis_options.yaml`:
+
+```yaml analysis_options.yaml
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # Additional custom rules can be added here
+```
+
+<Tip>
+  Run `flutter analyze` before committing to catch style and potential runtime issues.
+</Tip>
+
+## Naming Conventions
+
+### File Naming
+
+<CodeGroup>
+
+```text Dart Files
+snake_case for all files
+✅ billing_bloc.dart
+✅ product_repository.dart
+✅ cart_item.dart
+❌ BillingBloc.dart
+❌ ProductRepository.dart
+```
+
+```text Feature Directories
+snake_case for directories
+✅ lib/features/billing/
+✅ lib/features/product/
+✅ lib/core/error/
+❌ lib/features/Billing/
+```
+
+</CodeGroup>
+
+### Class Naming
+
+<CardGroup cols={2}>
+  <Card title="Classes & Types" icon="cube">
+    **PascalCase** for classes, enums, typedefs
+    ```dart
+    class ProductRepository { }
+    class CartItem { }
+    class BillingBloc { }
+    enum OrderStatus { }
+    ```
+  </Card>
+  
+  <Card title="Variables & Methods" icon="code">
+    **camelCase** for variables, methods, parameters
+    ```dart
+    final cartItems = [];
+    void addProduct() { }
+    String productName;
+    ```
+  </Card>
+</CardGroup>
+
+### Specific Conventions
+
+<Tabs>
+  <Tab title="BLoC Components">
+    ```dart BLoC Naming Patterns
+    // BLoC classes
+    class BillingBloc extends Bloc<BillingEvent, BillingState> { }
+    
+    // Events: <Verb><Noun>Event
+    class ScanBarcodeEvent extends BillingEvent { }
+    class AddProductToCartEvent extends BillingEvent { }
+    class RemoveProductFromCartEvent extends BillingEvent { }
+    class ClearCartEvent extends BillingEvent { }
+    
+    // States: <Noun>State
+    class BillingState extends Equatable { }
+    class ProductLoadingState extends Equatable { }
+    
+    // Event handlers: _on<EventName>
+    Future<void> _onScanBarcode(ScanBarcodeEvent event, Emitter<BillingState> emit) { }
+    void _onAddProductToCart(AddProductToCartEvent event, Emitter<BillingState> emit) { }
+    ```
+  </Tab>
+  
+  <Tab title="Use Cases">
+    ```dart Use Case Naming
+    // Use cases: <Verb><Noun>UseCase
+    class GetProductByBarcodeUseCase extends UseCase<Product, String> { }
+    class AddProductUseCase extends UseCase<void, Product> { }
+    class DeleteProductUseCase extends UseCase<void, String> { }
+    class GetProductsUseCase extends UseCase<List<Product>, NoParams> { }
+    ```
+  </Tab>
+  
+  <Tab title="Repositories">
+    ```dart Repository Naming
+    // Repository interfaces (domain layer)
+    abstract class ProductRepository {
+      Future<Either<Failure, List<Product>>> getProducts();
+      Future<Either<Failure, Product>> getProductByBarcode(String barcode);
+    }
+    
+    // Repository implementations (data layer)
+    class ProductRepositoryImpl implements ProductRepository { }
+    ```
+  </Tab>
+  
+  <Tab title="Models & Entities">
+    ```dart Model vs Entity
+    // Domain entities (pure Dart, no annotations)
+    class Product extends Equatable {
+      final String id;
+      final String name;
+      final double price;
+    }
+    
+    // Data models (with Hive/JSON annotations)
+    @HiveType(typeId: 0)
+    class ProductModel extends Product {
+      @override
+      @HiveField(0)
+      final String id;
+      
+      // Conversion methods
+      factory ProductModel.fromEntity(Product product) { }
+      Product toEntity() { }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Code Organization
+
+### Import Ordering
+
+<Steps>
+  <Step title="Flutter SDK imports">
+    ```dart
+    import 'package:flutter/material.dart';
+    import 'package:flutter/cupertino.dart';
+    ```
+  </Step>
+  
+  <Step title="External package imports">
+    ```dart
+    import 'package:flutter_bloc/flutter_bloc.dart';
+    import 'package:equatable/equatable.dart';
+    import 'package:fpdart/fpdart.dart';
+    ```
+  </Step>
+  
+  <Step title="Internal package imports">
+    ```dart
+    import 'package:billing_app/core/error/failure.dart';
+    import 'package:billing_app/features/product/domain/entities/product.dart';
+    ```
+  </Step>
+  
+  <Step title="Relative imports (same feature)">
+    ```dart
+    import '../../domain/entities/cart_item.dart';
+    import '../bloc/billing_bloc.dart';
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  Separate import groups with blank lines for better readability.
+</Info>
+
+### File Structure Pattern
+
+```dart Standard Dart File Structure
+// 1. Imports (ordered as above)
+import 'package:equatable/equatable.dart';
+import 'package:fpdart/fpdart.dart';
+import '../error/failure.dart';
+
+// 2. Part statements (for code generation)
+part 'product_model.g.dart';
+
+// 3. Class definition
+class ProductRepository {
+  // 4. Constants (static const)
+  static const int maxResults = 100;
+  
+  // 5. Fields (final preferred)
+  final HiveBox box;
+  
+  // 6. Constructor
+  const ProductRepository({required this.box});
+  
+  // 7. Public methods
+  Future<Either<Failure, Product>> getProduct(String id) { }
+  
+  // 8. Private methods
+  String _formatBarcode(String barcode) { }
+}
+```
+
+## Functional Programming Patterns
+
+### The Either Pattern
+
+<Card title="Core Pattern" icon="code-compare">
+  All operations that can fail must return `Either<Failure, T>`
+</Card>
+
+```dart Either Pattern Usage
+import 'package:fpdart/fpdart.dart';
+
+// ✅ Correct: Return Either for fallible operations
+Future<Either<Failure, Product>> getProductByBarcode(String barcode) async {
+  try {
+    final box = HiveDatabase.productBox;
+    final product = box.values.firstWhere(
+      (element) => element.barcode == barcode,
+      orElse: () => throw Exception('Product not found'),
+    );
+    return Right(product);  // Success case
+  } catch (e) {
+    return Left(CacheFailure(e.toString()));  // Failure case
+  }
+}
+
+// ✅ Correct: Handle Either with fold
+final result = await getProductByBarcode('12345');
+result.fold(
+  (failure) => print('Error: ${failure.message}'),  // Left (failure)
+  (product) => print('Found: ${product.name}'),      // Right (success)
+);
+
+// ❌ Wrong: Throwing exceptions directly
+Future<Product> getProduct(String id) async {
+  if (product == null) {
+    throw Exception('Not found');  // Don't do this!
+  }
+  return product;
+}
+```
+
+<AccordionGroup>
+  <Accordion title="When to use Right() vs Left()">
+    ```dart
+    // Right: Operation succeeded
+    return Right(product);              // Single value
+    return Right(products);             // List
+    return const Right(null);          // Void operations (delete, update)
+    
+    // Left: Operation failed
+    return Left(CacheFailure('Database error'));
+    return Left(NetworkFailure('Connection timeout'));
+    ```
+  </Accordion>
+  
+  <Accordion title="Pattern matching with fold()">
+    ```dart
+    // fold() executes one of two functions based on Either side
+    result.fold(
+      (failure) => emit(state.copyWith(error: failure.message)),
+      (product) => add(AddProductToCartEvent(product)),
+    );
+    
+    // Alternative: pattern matching
+    if (result.isRight()) {
+      final product = result.getRight().getOrElse(() => throw Error());
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Immutability Patterns
+
+### Const Constructors
+
+<Tabs>
+  <Tab title="Entities">
+    ```dart Domain Entities
+    class CartItem extends Equatable {
+      final Product product;
+      final int quantity;
+    
+      // Const constructor for compile-time constants
+      const CartItem({
+        required this.product,
+        this.quantity = 1,
+      });
+    
+      // Always provide copyWith for immutable updates
+      CartItem copyWith({
+        Product? product,
+        int? quantity,
+      }) {
+        return CartItem(
+          product: product ?? this.product,
+          quantity: quantity ?? this.quantity,
+        );
+      }
+    
+      @override
+      List<Object> get props => [product, quantity];
+    }
+    ```
+  </Tab>
+  
+  <Tab title="States">
+    ```dart BLoC States
+    class BillingState extends Equatable {
+      final List<CartItem> cartItems;
+      final String? error;
+      final bool isPrinting;
+    
+      // Const constructor with default values
+      const BillingState({
+        this.cartItems = const [],  // Empty const list
+        this.error,
+        this.isPrinting = false,
+      });
+    
+      // copyWith with special handling for nullable fields
+      BillingState copyWith({
+        List<CartItem>? cartItems,
+        String? error,
+        bool clearError = false,  // Special flag to clear nullable field
+        bool? isPrinting,
+      }) {
+        return BillingState(
+          cartItems: cartItems ?? this.cartItems,
+          error: clearError ? null : (error ?? this.error),
+          isPrinting: isPrinting ?? this.isPrinting,
+        );
+      }
+    
+      @override
+      List<Object?> get props => [cartItems, error, isPrinting];
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Events">
+    ```dart BLoC Events
+    abstract class BillingEvent extends Equatable {
+      const BillingEvent();
+    
+      @override
+      List<Object> get props => [];
+    }
+    
+    class ScanBarcodeEvent extends BillingEvent {
+      final String barcode;
+    
+      const ScanBarcodeEvent(this.barcode);
+    
+      @override
+      List<Object> get props => [barcode];
+    }
+    
+    // Events without data
+    class ClearCartEvent extends BillingEvent {
+      const ClearCartEvent();
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### List Immutability
+
+<Warning>
+  Never mutate lists directly in state. Always create new instances.
+</Warning>
+
+```dart List Operations
+// ❌ Wrong: Mutating existing list
+void _onAddItem(AddItemEvent event, Emitter<State> emit) {
+  state.items.add(event.item);  // Mutates state!
+  emit(state);
+}
+
+// ✅ Correct: Create new list
+void _onAddItem(AddItemEvent event, Emitter<State> emit) {
+  emit(state.copyWith(
+    items: [...state.items, event.item],  // Spread operator
+  ));
+}
+
+// ✅ Correct: List.from() for modifications
+void _onUpdateItem(UpdateItemEvent event, Emitter<State> emit) {
+  final items = List<CartItem>.from(state.items);
+  items[index] = items[index].copyWith(quantity: event.quantity);
+  emit(state.copyWith(items: items));
+}
+
+// ✅ Correct: where() for filtering (creates new list)
+void _onRemoveItem(RemoveItemEvent event, Emitter<State> emit) {
+  final updatedList = state.items
+      .where((item) => item.id != event.id)
+      .toList();
+  emit(state.copyWith(items: updatedList));
+}
+```
+
+## Equatable Implementation
+
+<Card title="Why Equatable?" icon="equals">
+  Equatable provides value-based equality for BLoC state comparison, preventing unnecessary rebuilds.
+</Card>
+
+```dart Equatable Best Practices
+import 'package:equatable/equatable.dart';
+
+class Product extends Equatable {
+  final String id;
+  final String name;
+  final double price;
+  final int stock;
+
+  const Product({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.stock,
+  });
+
+  // ✅ Include all fields used for equality comparison
+  @override
+  List<Object> get props => [id, name, price, stock];
+}
+
+// For nullable fields, use Object? type
+class BillingState extends Equatable {
+  final List<CartItem> cartItems;
+  final String? error;  // Nullable
+
+  const BillingState({this.cartItems = const [], this.error});
+
+  @override
+  List<Object?> get props => [cartItems, error];  // Object? for nullables
+}
+```
+
+<Tip>
+  Enable `stringify: true` during development for better debugging:
+  ```dart
+  @override
+  bool get stringify => true;
+  ```
+</Tip>
+
+## Code Generation
+
+### Hive Models
+
+```dart Hive Type Annotations
+import 'package:hive/hive.dart';
+import '../../domain/entities/product.dart';
+
+part 'product_model.g.dart';  // Generated file
+
+@HiveType(typeId: 0)  // Unique typeId for each model
+class ProductModel extends Product {
+  @override
+  @HiveField(0)  // Unique field ID
+  final String id;
+  
+  @override
+  @HiveField(1)
+  final String name;
+  
+  @override
+  @HiveField(2)
+  final String barcode;
+  
+  @override
+  @HiveField(3)
+  final double price;
+  
+  @override
+  @HiveField(4)
+  final int stock;
+
+  const ProductModel({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.price,
+    required this.stock,
+  }) : super(
+          id: id,
+          name: name,
+          barcode: barcode,
+          price: price,
+          stock: stock,
+        );
+
+  // Conversion between entity and model
+  factory ProductModel.fromEntity(Product product) {
+    return ProductModel(
+      id: product.id,
+      name: product.name,
+      barcode: product.barcode,
+      price: product.price,
+      stock: product.stock,
+    );
+  }
+
+  Product toEntity() => this;  // Model extends entity
+}
+```
+
+<Warning>
+  **Important:** `typeId` and `HiveField` numbers must be unique and never changed after deployment.
+</Warning>
+
+### Running Code Generation
+
+```bash Build Runner Commands
+# Generate code (recommended)
+dart run build_runner build --delete-conflicting-outputs
+
+# Watch mode (auto-regenerates on file changes)
+dart run build_runner watch --delete-conflicting-outputs
+
+# Clean generated files
+dart run build_runner clean
+```
+
+## Documentation Comments
+
+```dart Documentation Standards
+/// Retrieves a product by its unique barcode identifier.
+///
+/// Returns [Right(Product)] if found, or [Left(CacheFailure)] if the product
+/// doesn't exist in the local database.
+///
+/// Example:
+/// ```dart
+/// final result = await getProductByBarcode('12345');
+/// result.fold(
+///   (failure) => print('Not found'),
+///   (product) => print(product.name),
+/// );
+/// ```
+Future<Either<Failure, Product>> getProductByBarcode(String barcode) async {
+  // Implementation
+}
+```
+
+<Info>
+  Use `///` for public APIs and `//` for implementation details.
+</Info>
+
+## Common Patterns
+
+<CardGroup cols={2}>
+  <Card title="Computed Properties" icon="function">
+    ```dart
+    class BillingState {
+      final List<CartItem> cartItems;
+      
+      // Computed property (no setter)
+      double get totalAmount => 
+        cartItems.fold(0, (sum, item) => sum + item.total);
+    }
+    ```
+  </Card>
+  
+  <Card title="Factory Constructors" icon="industry">
+    ```dart
+    class ProductModel {
+      factory ProductModel.fromEntity(Product product) {
+        return ProductModel(
+          id: product.id,
+          name: product.name,
+        );
+      }
+    }
+    ```
+  </Card>
+</CardGroup>
+
+## Quick Reference
+
+<AccordionGroup>
+  <Accordion title="Do's" icon="check">
+    - ✅ Use `const` constructors wherever possible
+    - ✅ Prefer `final` for all fields
+    - ✅ Return `Either<Failure, T>` from repositories
+    - ✅ Extend `Equatable` for entities and states
+    - ✅ Use `copyWith()` for immutable updates
+    - ✅ Create new lists instead of mutating
+    - ✅ Run `flutter analyze` before commits
+  </Accordion>
+  
+  <Accordion title="Don'ts" icon="xmark">
+    - ❌ Don't mutate state objects
+    - ❌ Don't throw exceptions in domain/data layers
+    - ❌ Don't use mutable collections in state
+    - ❌ Don't skip code generation
+    - ❌ Don't import data layer in domain
+    - ❌ Don't use implementation details in public APIs
+  </Accordion>
+</AccordionGroup>

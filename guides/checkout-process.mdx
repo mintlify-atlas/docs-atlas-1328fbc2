@@ -1,0 +1,286 @@
+---
+title: Checkout Process Guide
+description: Step-by-step guide to processing customer orders from scanning to payment
+---
+
+The Flutter Billing App provides a streamlined checkout process using real-time barcode scanning and automated calculations. This guide covers the complete workflow from scanning items to printing receipts.
+
+## The Home Screen Scanner
+
+The home screen is divided into two main sections:
+
+<CardGroup cols={2}>
+  <Card title="Top Section" icon="camera">
+    Live camera view for scanning product barcodes
+  </Card>
+  <Card title="Bottom Section" icon="shopping-cart">
+    Cart display showing scanned items and total price
+  </Card>
+</CardGroup>
+
+## Scanning Items
+
+<Steps>
+  <Step title="Enable the Camera">
+    When you open the app, the camera starts automatically. If it's turned off, you'll see a message "Camera is turned off" with a button to turn it on.
+    
+    **Camera Controls:**
+    - **Flash icon**: Toggle flashlight on/off for low-light scanning
+    - **Camera icon**: Turn camera on/off to save battery
+    - **Settings icon**: Access app settings
+  </Step>
+  
+  <Step title="Position the Barcode">
+    Point your camera at the product barcode. A scanning frame with green corners appears in the center of the screen.
+    
+    <Info>
+      The app automatically detects and reads barcodes when they're within the scanning frame. No need to tap or capture manually.
+    </Info>
+  </Step>
+  
+  <Step title="Product Added to Cart">
+    When a barcode is successfully scanned:
+    
+    - Your phone **vibrates** briefly (if vibration is enabled)
+    - The product automatically appears in the cart below
+    - The total price updates immediately
+    
+    <Note>
+      **Cooldown Protection**: The same barcode can only be scanned once every 2 seconds to prevent accidental duplicate scans.
+    </Note>
+  </Step>
+  
+  <Step title="Handle Scanning Errors">
+    If a product isn't found in your inventory, you'll see an error message:
+    
+    ```
+    Product not found: [barcode]
+    ```
+    
+    This means the barcode isn't in your inventory yet. You'll need to add it first from Settings > Products.
+  </Step>
+</Steps>
+
+## Managing the Cart
+
+As you scan items, they appear in the cart at the bottom of the screen.
+
+### Cart Display
+
+Each cart item shows:
+- **Product Name**: Clear product identifier
+- **Unit Price**: Price per item (₹X.XX format)
+- **Quantity Controls**: Buttons to adjust quantity
+- **Total Price**: Updated in real-time at the top
+
+### Adjusting Quantities
+
+<Steps>
+  <Step title="Increase Quantity">
+    Tap the **+ button** on the right side of any cart item to add one more unit.
+    
+    <Tip>
+      You can also scan the same barcode multiple times to increase quantity (with 2-second cooldown between scans).
+    </Tip>
+  </Step>
+  
+  <Step title="Decrease Quantity">
+    Tap the **- button** to reduce quantity by one.
+    
+    - If quantity is greater than 1, it decreases by one
+    - If quantity is 1, the item is removed from the cart entirely
+  </Step>
+</Steps>
+
+### Cart Summary
+
+At the top of the cart panel, you'll see:
+
+```
+Scanned Items
+X items total
+
+TOTAL PRICE
+₹XXX.XX
+```
+
+This updates automatically as you add, remove, or adjust items.
+
+## Proceeding to Checkout
+
+<Steps>
+  <Step title="Review Your Cart">
+    Before proceeding, verify that:
+    - All items are correct
+    - Quantities are accurate
+    - Total price looks right
+  </Step>
+  
+  <Step title="Tap Review Order">
+    When you're ready, tap the **Review Order** button at the bottom of the screen.
+    
+    <Warning>
+      This button is only enabled when you have at least one item in your cart.
+    </Warning>
+    
+    The camera automatically stops when you navigate to checkout to save battery.
+  </Step>
+</Steps>
+
+## The Checkout Page
+
+The checkout page displays a detailed order summary and payment options.
+
+### Order Summary Table
+
+You'll see a formatted table with:
+
+| Product Name | Price | Total |
+|--------------|-------|-------|
+| 2 x Basmati Rice | ₹299.00 | ₹598.00 |
+| 1 x Cooking Oil | ₹450.00 | ₹450.00 |
+
+### Payment QR Code
+
+If you've configured UPI details in your shop settings:
+
+<Steps>
+  <Step title="QR Code Generated">
+    A UPI payment QR code is automatically generated with:
+    - Your UPI ID
+    - Shop name
+    - Exact order total
+    - Currency (INR)
+  </Step>
+  
+  <Step title="Customer Scans to Pay">
+    The customer can scan this QR code with any UPI app (Google Pay, PhonePe, Paytm, etc.) to complete payment.
+    
+    <Info>
+      The QR code uses the standard UPI deep link format: `upi://pay?pa=[UPI_ID]&pn=[SHOP_NAME]&am=[AMOUNT]&cu=INR`
+    </Info>
+  </Step>
+</Steps>
+
+### Grand Total Display
+
+At the bottom, the grand total is prominently displayed:
+
+```
+GRAND TOTAL
+₹1,048.00
+```
+
+## Printing the Receipt
+
+<Steps>
+  <Step title="Connect Printer">
+    Ensure your Bluetooth thermal printer is connected in Settings. See the [Printer Setup Guide](/guides/printer-setup) for details.
+  </Step>
+  
+  <Step title="Tap Print Receipt">
+    Tap the **Print Receipt** button at the bottom of the checkout page.
+    
+    The button shows a loading indicator while printing.
+  </Step>
+  
+  <Step title="Receipt Prints">
+    The receipt prints with the following information:
+    
+    - **Shop Name** (centered, bold, large text)
+    - **Address Lines** (if configured)
+    - **Phone Number**
+    - **Date and Time** (format: DD-MM-YYYY HH:MM AM/PM)
+    - **Itemized List** with quantities and totals
+    - **Grand Total** (right-aligned, bold)
+    - **Footer Text** (custom message, centered)
+    
+    <Tip>
+      If you see "Printer not connected," the app will attempt to auto-connect using your saved printer settings.
+    </Tip>
+  </Step>
+  
+  <Step title="Success Confirmation">
+    When printing succeeds, you'll see a green success message:
+    
+    ```
+    Printed successfully
+    ```
+  </Step>
+</Steps>
+
+## Completing the Transaction
+
+<Steps>
+  <Step title="Return to Home">
+    Tap the **back arrow** in the top-left corner or use your device's back button.
+  </Step>
+  
+  <Step title="Cart Clears Automatically">
+    When you leave the checkout page, the cart is automatically cleared and you're ready for the next customer.
+    
+    <Warning>
+      Going back from checkout will clear your cart. Make sure you've printed the receipt before leaving this page.
+    </Warning>
+  </Step>
+  
+  <Step title="Ready for Next Customer">
+    The camera resumes automatically and you can start scanning items for the next order.
+  </Step>
+</Steps>
+
+## Tips for Faster Checkout
+
+<CardGroup cols={2}>
+  <Card title="Batch Similar Items" icon="layer-group">
+    Scan all units of the same product at once, then adjust quantity if needed
+  </Card>
+  <Card title="Use Good Lighting" icon="lightbulb">
+    Enable the flashlight in low-light conditions for faster scanning
+  </Card>
+  <Card title="Pre-configure Shop" icon="store">
+    Set up shop details and UPI beforehand to avoid delays during checkout
+  </Card>
+  <Card title="Test Printer" icon="print">
+    Test your printer connection before starting your business day
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Barcode won't scan">
+    - Ensure the barcode is clean and not damaged
+    - Try enabling the flashlight for better visibility
+    - Make sure the barcode is within the green scanning frame
+    - Check that the product exists in your inventory
+  </Accordion>
+  
+  <Accordion title="Print failed error">
+    - Verify printer is turned on and has paper
+    - Check Bluetooth connection in Settings
+    - Try disconnecting and reconnecting the printer
+    - Ensure the printer is within Bluetooth range
+  </Accordion>
+  
+  <Accordion title="QR code not showing">
+    You need to configure your UPI ID in Shop Details. Go to Settings > Shop Details and add your UPI ID.
+  </Accordion>
+  
+  <Accordion title="Wrong item total">
+    - Verify product prices in Product Management
+    - Check if quantity is correct
+    - Update product pricing if needed
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Printer Setup" icon="print" href="/guides/printer-setup">
+    Configure your Bluetooth thermal printer for receipt printing
+  </Card>
+  <Card title="Managing Inventory" icon="boxes-stacked" href="/guides/managing-inventory">
+    Learn how to update prices and manage your product catalog
+  </Card>
+</CardGroup>

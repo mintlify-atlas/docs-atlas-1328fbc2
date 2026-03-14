@@ -1,0 +1,452 @@
+---
+title: Thermal Printing
+description: Bluetooth thermal receipt printing with ESC/POS commands
+icon: print
+---
+
+## Overview
+
+The app supports printing receipts to Bluetooth thermal printers using the `print_bluetooth_thermal` package with custom ESC/POS command formatting.
+
+<CardGroup cols={2}>
+  <Card title="Bluetooth Connection" icon="bluetooth">
+    Connect to paired thermal printers via Bluetooth
+  </Card>
+  <Card title="ESC/POS Commands" icon="code">
+    Custom formatting using ESC/POS protocol
+  </Card>
+  <Card title="Receipt Layout" icon="receipt">
+    Professional receipts with shop details and itemized billing
+  </Card>
+  <Card title="Auto-Reconnect" icon="arrows-rotate">
+    Automatically reconnects to last used printer
+  </Card>
+</CardGroup>
+
+## Printer Setup
+
+### Pairing a Printer
+
+<Steps>
+  <Step title="Pair via System Settings">
+    Open Android Bluetooth settings and pair with your thermal printer
+  </Step>
+  
+  <Step title="Grant Permissions">
+    Allow Bluetooth permissions when prompted:
+    - Bluetooth (Android < 12)
+    - Bluetooth Scan (Android 12+)
+    - Bluetooth Connect (Android 12+)
+    - Location access
+  </Step>
+  
+  <Step title="Open App Settings">
+    Navigate to Settings in the billing app
+  </Step>
+  
+  <Step title="Refresh Devices">
+    Tap the refresh icon to scan for paired devices
+  </Step>
+  
+  <Step title="Connect">
+    The app automatically connects to the first paired thermal printer
+  </Step>
+</Steps>
+
+## Receipt Format
+
+Receipts include:
+
+1. **Header Section** (centered, bold, large):
+   - Shop name
+   - Address line 1
+   - Address line 2 (if provided)
+   - Phone number
+   - Date and time
+
+2. **Items Table**:
+   - Product name with quantity
+   - Unit price
+   - Line total
+   - Separator lines
+
+3. **Footer Section**:
+   - Grand total (right-aligned, bold)
+   - Custom footer message (centered)
+   - Feed lines for easy tearing
+
+## ESC/POS Commands
+
+The app implements ESC/POS commands for formatting:
+
+```dart lib/core/utils/printer_helper.dart
+class EscPos {
+  static const List<int> init = [0x1B, 0x40];              // Initialize printer
+  static const List<int> alignCenter = [0x1B, 0x61, 0x01]; // Center align
+  static const List<int> alignLeft = [0x1B, 0x61, 0x00];   // Left align
+  static const List<int> alignRight = [0x1B, 0x61, 0x02];  // Right align
+  static const List<int> boldOn = [0x1B, 0x45, 0x01];      // Bold ON
+  static const List<int> boldOff = [0x1B, 0x45, 0x00];     // Bold OFF
+  static const List<int> textNormal = [0x1D, 0x21, 0x00];  // Normal size
+  static const List<int> textLarge = [0x1D, 0x21, 0x11];   // Large text
+  static const List<int> lineFeed = [0x0A];                // Line feed
+}
+```
+
+## Implementation Details
+
+### PrinterHelper Singleton
+
+The `PrinterHelper` class manages printer connections:
+
+```dart lib/core/utils/printer_helper.dart
+class PrinterHelper {
+  // Singleton
+  static final PrinterHelper _instance = PrinterHelper._internal();
+  factory PrinterHelper() => _instance;
+  PrinterHelper._internal();
+
+  bool _isConnected = false;
+  bool get isConnected => _isConnected;
+
+  Future<bool> checkPermission() async {
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
+
+    return statuses.values.every((status) => status.isGranted);
+  }
+
+  Future<List<BluetoothInfo>> getBondedDevices() async {
+    try {
+      final List<BluetoothInfo> list =
+          await PrintBluetoothThermal.pairedBluetooths;
+      return list;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> connect(String macAddress) async {
+    try {
+      final bool result =
+          await PrintBluetoothThermal.connect(macPrinterAddress: macAddress);
+      _isConnected = result;
+      return result;
+    } catch (e) {
+      _isConnected = false;
+      return false;
+    }
+  }
+}
+```
+
+### Receipt Printing Method
+
+```dart lib/core/utils/printer_helper.dart
+Future<void> printReceipt({
+  required String shopName,
+  required String address1,
+  required String address2,
+  required String phone,
+  required List<Map<String, dynamic>> items,
+  required double total,
+  required String footer,
+}) async {
+  if (!_isConnected) return;
+
+  List<int> bytes = [];
+
+  // Init
+  bytes += EscPos.init;
+
+  // Shop Name (Center, Bold, Large)
+  bytes += EscPos.alignCenter;
+  bytes += EscPos.boldOn;
+  bytes += EscPos.textLarge;
+  bytes += _textToBytes(shopName);
+  bytes += EscPos.lineFeed;
+
+  // Address & Phone (Normal, Center)
+  bytes += EscPos.textNormal;
+  bytes += EscPos.boldOff;
+  if (address1.isNotEmpty) {
+    bytes += _textToBytes(address1);
+    bytes += EscPos.lineFeed;
+  }
+  if (address2.isNotEmpty) {
+    bytes += _textToBytes(address2);
+    bytes += EscPos.lineFeed;
+  }
+  bytes += _textToBytes(phone);
+  bytes += EscPos.lineFeed;
+
+  // Date and Time
+  String formattedDate =
+      DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.now());
+  bytes += _textToBytes(formattedDate);
+  bytes += EscPos.lineFeed;
+
+  bytes += _textToBytes('--------------------------------');
+  bytes += EscPos.lineFeed;
+
+  // Header (Align Left)
+  bytes += EscPos.alignLeft;
+  bytes += _textToBytes('Item            Price   Total');
+  bytes += EscPos.lineFeed;
+  bytes += _textToBytes('--------------------------------');
+  bytes += EscPos.lineFeed;
+
+  // Items
+  for (var item in items) {
+    String name = item['name'].toString();
+    String qty = item['qty'].toString();
+    String price = item['price'].toString();
+    String totalItem = item['total'].toString();
+
+    String prefix = '${qty}x $name';
+    if (prefix.length > 16) prefix = prefix.substring(0, 16);
+
+    String line = prefix.padRight(16) + price.padRight(8) + totalItem;
+    bytes += _textToBytes(line);
+    bytes += EscPos.lineFeed;
+  }
+
+  bytes += _textToBytes('--------------------------------');
+  bytes += EscPos.lineFeed;
+
+  // Total (Align Right)
+  bytes += EscPos.alignRight;
+  bytes += EscPos.boldOn;
+  bytes += _textToBytes('TOTAL: $total');
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.boldOff;
+  bytes += EscPos.lineFeed;
+
+  // Footer (Center)
+  bytes += EscPos.alignCenter;
+  bytes += _textToBytes(footer);
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.lineFeed;
+
+  await PrintBluetoothThermal.writeBytes(bytes);
+}
+```
+
+## Print Workflow
+
+### From Checkout Page
+
+<Steps>
+  <Step title="User Taps Print">
+    Tap "Print Receipt" button on checkout page
+  </Step>
+  
+  <Step title="Check Connection">
+    App checks if printer is connected
+  </Step>
+  
+  <Step title="Auto-Connect">
+    If not connected, attempts to connect using saved MAC address from Hive
+  </Step>
+  
+  <Step title="Format Receipt">
+    BillingBloc formats cart items and shop details
+  </Step>
+  
+  <Step title="Send to Printer">
+    PrinterHelper sends ESC/POS bytes to printer
+  </Step>
+  
+  <Step title="Show Feedback">
+    Green snackbar on success, red on failure
+  </Step>
+</Steps>
+
+### Print Logic in BillingBloc
+
+```dart lib/features/billing/presentation/bloc/billing_bloc.dart
+Future<void> _onPrintReceipt(
+    PrintReceiptEvent event, Emitter<BillingState> emit) async {
+  final printerHelper = PrinterHelper();
+
+  if (!printerHelper.isConnected) {
+    final savedMac = HiveDatabase.settingsBox.get('printer_mac');
+    if (savedMac != null) {
+      final connected = await printerHelper.connect(savedMac);
+      if (!connected) {
+        emit(state.copyWith(
+            error: 'Failed to auto-connect to printer!', clearError: false));
+        emit(state.copyWith(clearError: true));
+        return;
+      }
+    } else {
+      emit(state.copyWith(
+          error: 'Printer not connected & no saved printer found!',
+          clearError: false));
+      emit(state.copyWith(clearError: true));
+      return;
+    }
+  }
+
+  emit(state.copyWith(
+      isPrinting: true, printSuccess: false, clearError: true));
+
+  try {
+    final items = state.cartItems
+        .map((item) => {
+              'name': item.product.name,
+              'qty': item.quantity,
+              'price': item.product.price,
+              'total': item.total,
+            })
+        .toList();
+
+    await printerHelper.printReceipt(
+        shopName: event.shopName,
+        address1: event.address1,
+        address2: event.address2,
+        phone: event.phone,
+        items: items,
+        total: state.totalAmount,
+        footer: event.footer);
+
+    emit(state.copyWith(isPrinting: false, printSuccess: true));
+  } catch (e) {
+    emit(state.copyWith(
+        isPrinting: false, error: 'Print failed: $e', clearError: false));
+    emit(state.copyWith(clearError: true));
+  }
+}
+```
+
+## Settings Page Integration
+
+The settings page shows printer status:
+
+```dart lib/features/settings/presentation/pages/settings_page.dart
+_buildListItem(
+  icon: Icons.print,
+  title: 'Print Device',
+  subtitleWidget: Row(
+    children: [
+      Text(
+        state.connectedMac != null
+            ? (state.connectedName ?? 'Printer connected')
+            : 'No printer connected',
+        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+      ),
+      if (state.connectedMac != null) ..[
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+              color: Colors.teal[100],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.teal[200]!)),
+          child: Text(
+            'CONNECTED',
+            style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: Colors.teal[700]),
+          ),
+        ),
+      ]
+    ],
+  ),
+)
+```
+
+## Permissions Required
+
+The app requests these permissions:
+
+```dart
+Permission.bluetooth,           // Basic Bluetooth (Android < 12)
+Permission.bluetoothScan,       // Scan for devices (Android 12+)
+Permission.bluetoothConnect,    // Connect to devices (Android 12+)
+Permission.location,            // Required for Bluetooth scanning
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Printer Not Found">
+    1. Ensure printer is paired in Android Bluetooth settings
+    2. Turn printer on and in range
+    3. Tap Settings gear icon to open Bluetooth settings
+    4. Pair the printer
+    5. Return to app and tap Refresh
+  </Accordion>
+  
+  <Accordion title="Connection Failed">
+    1. Check printer power and Bluetooth status
+    2. Unpair and re-pair in system settings
+    3. Restart the printer
+    4. Clear app cache and reconnect
+  </Accordion>
+  
+  <Accordion title="Receipt Formatting Issues">
+    1. Different printers support different character widths (usually 32 or 48)
+    2. Adjust column widths in `printReceipt()` method if needed
+    3. Test with sample receipts
+  </Accordion>
+  
+  <Accordion title="Auto-Reconnect Not Working">
+    1. Check that MAC address is saved in Hive
+    2. Verify printer is in range and powered on
+    3. Re-connect manually from Settings once
+  </Accordion>
+</AccordionGroup>
+
+## Receipt Example
+
+```
+        Elite Groceries
+     Samrajpet, Mecheri
+       Salem - 636453
+      +91 7010674588
+   14-03-2026 02:30 PM
+--------------------------------
+Item            Price   Total
+--------------------------------
+2x Basmati Rice 150.00  300.00
+1x Cooking Oil  450.00  450.00
+3x Sugar        45.00   135.00
+--------------------------------
+                 TOTAL: 885.00
+
+   Thank you, Visit again!!!
+
+
+
+```
+
+## Best Practices
+
+<Check>Pair printer before first use in system Bluetooth settings</Check>
+<Check>Keep printer charged and within 10 meters of device</Check>
+<Check>Configure shop details before printing receipts</Check>
+<Check>Test print after connecting new printer</Check>
+<Check>Use thermal paper rolls (usually 58mm or 80mm width)</Check>
+
+## Supported Printers
+
+The app works with most ESC/POS-compatible thermal printers:
+
+- **58mm width**: Common for small receipt printers
+- **80mm width**: Standard for retail
+- **Bluetooth connectivity**: Required
+- **ESC/POS protocol**: Standard thermal printer language
+
+Popular models include:
+- Zebronics ZEB-PBT58
+- TVS RP 3160 Star
+- Epson TM series
+- Any ESC/POS Bluetooth thermal printer

@@ -1,0 +1,426 @@
+---
+title: Configuration
+description: Configure shop settings, Bluetooth printer, and app preferences
+---
+
+## Overview
+
+This guide covers initial configuration of the Flutter Billing App including shop details, Bluetooth printer setup, and app settings.
+
+<Info>
+  All configuration is stored locally in Hive database and persists across app restarts.
+</Info>
+
+## Shop Configuration
+
+Shop details appear on printed receipts and payment QR codes. Configure these settings first for a professional checkout experience.
+
+### Shop Details Schema
+
+The shop model includes the following fields:
+
+```dart lib/features/shop/domain/entities/shop.dart
+class Shop {
+  final String name;           // Shop/business name
+  final String addressLine1;   // Primary address
+  final String addressLine2;   // Secondary address
+  final String phoneNumber;    // Contact number
+  final String upiId;          // UPI ID for payment QR
+  final String footerText;     // Receipt footer message
+}
+```
+
+### Configuring Shop Details
+
+<Steps>
+  <Step title="Navigate to Shop Settings">
+    From the home screen:
+    1. Tap the **Settings** icon (top-right)
+    2. Select **Shop Details**
+  </Step>
+
+  <Step title="Enter Business Information">
+    Fill in all required fields:
+
+    <ParamField path="name" type="string" required>
+      Your shop or business name (e.g., "ABC Retail Store")
+    </ParamField>
+
+    <ParamField path="addressLine1" type="string" required>
+      Primary address line (e.g., "123 Main Street")
+    </ParamField>
+
+    <ParamField path="addressLine2" type="string">
+      Secondary address line (e.g., "Suite 100, Downtown")
+    </ParamField>
+
+    <ParamField path="phoneNumber" type="string" required>
+      Contact phone number (e.g., "+91 98765 43210")
+    </ParamField>
+
+    <ParamField path="upiId" type="string">
+      UPI ID for payment QR code generation (e.g., "merchant@upi")
+    </ParamField>
+
+    <ParamField path="footerText" type="string">
+      Custom footer message on receipts (e.g., "Thank you for your business!")
+    </ParamField>
+  </Step>
+
+  <Step title="Save Configuration">
+    Tap **Save** to persist settings to local database.
+
+    The configuration is immediately available for:
+    - Receipt printing
+    - UPI QR code generation
+    - Display in checkout screen
+  </Step>
+</Steps>
+
+### Shop Data Persistence
+
+Shop configuration is managed through the `ShopBloc` and persisted in Hive:
+
+```dart lib/core/data/hive_database.dart
+static Box<ShopModel> get shopBox => Hive.box<ShopModel>(shopBoxName);
+```
+
+<Tip>
+  Shop details can be updated anytime. Changes immediately reflect in the next checkout.
+</Tip>
+
+## Bluetooth Printer Configuration
+
+Connect a thermal Bluetooth printer for physical receipt printing.
+
+### Supported Printers
+
+The app uses `print_bluetooth_thermal` package supporting:
+- 58mm thermal printers
+- 80mm thermal printers
+- ESC/POS compatible devices
+
+### Printer Setup
+
+<Steps>
+  <Step title="Enable Bluetooth">
+    Ensure Bluetooth is enabled on your device:
+    - Android: Settings → Bluetooth
+    - iOS: Settings → Bluetooth
+
+    <Warning>
+      The app requires Bluetooth permissions. Grant access when prompted.
+    </Warning>
+  </Step>
+
+  <Step title="Power On Printer">
+    1. Turn on your thermal printer
+    2. Ensure it's in pairing mode (refer to printer manual)
+    3. Verify printer has paper loaded
+  </Step>
+
+  <Step title="Connect from App">
+    ```dart lib/features/settings/presentation/bloc/printer_bloc.dart
+    BlocProvider<PrinterBloc>(
+      create: (context) => di.sl<PrinterBloc>()..add(InitPrinterEvent())
+    )
+    ```
+
+    From the app:
+    1. Navigate to **Settings** → **Printer Settings**
+    2. Tap **Scan for Devices**
+    3. Select your printer from the list
+    4. Wait for connection confirmation
+    5. Perform a test print to verify
+  </Step>
+
+  <Step title="Test Receipt Print">
+    After connection:
+    1. Tap **Test Print**
+    2. Verify receipt prints correctly
+    3. Check formatting and alignment
+  </Step>
+</Steps>
+
+### Printer Repository
+
+Bluetooth printer state is managed through the printer repository:
+
+```dart lib/features/settings/domain/repositories/printer_repository.dart
+abstract class PrinterRepository {
+  Future<List<BluetoothDevice>> scanDevices();
+  Future<bool> connect(String address);
+  Future<bool> disconnect();
+  Future<bool> print(ReceiptData data);
+}
+```
+
+### Receipt Format
+
+Receipts include the following sections:
+
+1. **Header**: Shop name and address from shop config
+2. **Contact**: Phone number
+3. **Separator**: Dashed line
+4. **Items Table**: Product name, quantity, price, total
+5. **Total**: Grand total amount
+6. **Footer**: Custom footer text
+7. **Timestamp**: Transaction date and time
+
+## App Settings
+
+General app preferences are stored in the settings box:
+
+```dart lib/core/data/hive_database.dart
+static const String settingsBoxName = 'settings';
+
+static Box get settingsBox => Hive.box(settingsBoxName);
+```
+
+### Available Settings
+
+<AccordionGroup>
+  <Accordion title="Camera Settings">
+    Configure camera behavior for barcode scanning:
+    - **Auto-start**: Camera starts automatically on app launch
+    - **Flashlight**: Enable/disable flashlight by default
+    - **Detection speed**: Normal or fast scanning
+    - **Vibration feedback**: Haptic feedback on successful scan
+
+    ```dart lib/features/billing/presentation/pages/home_page.dart
+    final MobileScannerController _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      returnImage: false,
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="Scanner Cooldown">
+    Prevent duplicate scans with cooldown logic:
+
+    ```dart lib/features/billing/presentation/pages/home_page.dart
+    // Cooldown logic: 2 seconds per identical barcode
+    if (_lastScanTimes.containsKey(rawValue)) {
+      final lastScan = _lastScanTimes[rawValue]!;
+      if (now.difference(lastScan).inSeconds < 2) {
+        continue;
+      }
+    }
+    ```
+
+    Default cooldown: **2 seconds** between identical barcode scans
+  </Accordion>
+
+  <Accordion title="Permissions">
+    Required permissions for full functionality:
+
+    **Camera Permission**:
+    - Android: `android.permission.CAMERA`
+    - iOS: `NSCameraUsageDescription`
+
+    **Bluetooth Permission**:
+    - Android: `BLUETOOTH`, `BLUETOOTH_ADMIN`, `BLUETOOTH_CONNECT`
+    - iOS: `NSBluetoothAlwaysUsageDescription`
+
+    **Vibration Permission**:
+    - Android: `android.permission.VIBRATE`
+
+    Configure in app settings:
+    ```dart
+    permission_handler: ^11.3.1
+    ```
+  </Accordion>
+
+  <Accordion title="UI Preferences">
+    Customize app appearance:
+
+    ```dart lib/core/theme/app_theme.dart
+    class AppTheme {
+      static ThemeData get lightTheme {
+        return ThemeData(
+          primaryColor: primaryColor,
+          scaffoldBackgroundColor: backgroundColor,
+          // ... theme configuration
+        );
+      }
+    }
+    ```
+
+    - Theme colors
+    - Font family (Google Fonts)
+    - Button styles
+    - Card elevations
+  </Accordion>
+</AccordionGroup>
+
+## Data Storage Structure
+
+All configuration is stored in three Hive boxes:
+
+<CodeGroup>
+```dart Products Box
+Box<ProductModel> productBox = Hive.box<ProductModel>('products');
+
+// Stores:
+// - Product inventory
+// - Barcode mappings
+// - Prices and details
+```
+
+```dart Shop Box
+Box<ShopModel> shopBox = Hive.box<ShopModel>('shop');
+
+// Stores:
+// - Shop name and address
+// - Contact information
+// - UPI payment details
+// - Receipt footer text
+```
+
+```dart Settings Box
+Box settingsBox = Hive.box('settings');
+
+// Stores:
+// - Printer configuration
+// - App preferences
+// - Camera settings
+// - Generic key-value pairs
+```
+</CodeGroup>
+
+## Configuration via Code
+
+For advanced users, configuration can be initialized programmatically:
+
+```dart Example: Initialize Shop Config
+import 'package:billing_app/core/service_locator.dart' as di;
+import 'package:billing_app/features/shop/domain/entities/shop.dart';
+
+void initializeShopConfig() async {
+  final shopBloc = di.sl<ShopBloc>();
+  
+  shopBloc.add(
+    UpdateShopEvent(
+      Shop(
+        name: 'My Retail Store',
+        addressLine1: '123 Main Street',
+        addressLine2: 'Downtown District',
+        phoneNumber: '+91 98765 43210',
+        upiId: 'merchant@upi',
+        footerText: 'Thank you! Visit again.',
+      ),
+    ),
+  );
+}
+```
+
+## Backup and Restore
+
+### Export Configuration
+
+Hive data is stored in application documents directory:
+
+```bash
+# Android
+/data/data/com.example.billing_app/
+
+# iOS
+~/Library/Application Support/
+```
+
+<Tip>
+  To backup configuration, copy the Hive database files from the app directory before uninstalling.
+</Tip>
+
+### Reset to Defaults
+
+To reset all configuration:
+
+```dart Reset All Settings
+import 'package:hive_flutter/hive_flutter.dart';
+
+Future<void> resetConfiguration() async {
+  // Clear all boxes
+  await Hive.box('products').clear();
+  await Hive.box('shop').clear();
+  await Hive.box('settings').clear();
+  
+  // Restart app
+}
+```
+
+<Warning>
+  Resetting configuration will delete all products, shop details, and settings. This action cannot be undone.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Printer Won't Connect">
+    **Solutions:**
+    1. Verify Bluetooth is enabled on device
+    2. Check printer is powered on and in pairing mode
+    3. Ensure no other device is connected to printer
+    4. Try restarting the printer
+    5. Grant Bluetooth permissions in app settings
+    6. Re-scan for devices
+  </Accordion>
+
+  <Accordion title="Shop Details Not Saving">
+    **Solutions:**
+    1. Ensure all required fields are filled
+    2. Check for validation errors
+    3. Verify Hive database is initialized
+    4. Try restarting the app
+    5. Check app logs for errors
+  </Accordion>
+
+  <Accordion title="Receipt Formatting Issues">
+    **Solutions:**
+    1. Verify printer paper width (58mm or 80mm)
+    2. Check shop name and address length
+    3. Ensure proper character encoding
+    4. Test with shorter text strings
+    5. Update printer firmware if available
+  </Accordion>
+
+  <Accordion title="Permission Denied Errors">
+    **Solutions:**
+    1. Open device Settings → Apps → Billing App
+    2. Enable Camera permission
+    3. Enable Bluetooth permission
+    4. Restart the app
+    5. Re-grant permissions when prompted
+  </Accordion>
+</AccordionGroup>
+
+## Security Considerations
+
+<Warning>
+  Sensitive data is stored locally on device. Ensure proper device security:
+  - Enable device lock screen
+  - Use secure Bluetooth pairing
+  - Regularly backup configuration
+  - Don't share device with unauthorized users
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Product Management" icon="box" href="/features/product-management">
+    Learn how to manage your product inventory
+  </Card>
+  <Card title="Billing & Checkout" icon="cash-register" href="/features/billing-checkout">
+    Master the checkout and billing process
+  </Card>
+  <Card title="Printer Integration" icon="print" href="/features/thermal-printing">
+    Advanced receipt printing and customization
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the app's clean architecture
+  </Card>
+</CardGroup>
+
+<Check>
+  **Configuration Complete!** Your app is now fully configured and ready for production use.
+</Check>

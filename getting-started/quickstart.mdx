@@ -1,0 +1,334 @@
+---
+title: Quick Start
+description: Get started with your first checkout in minutes
+---
+
+## Overview
+
+This guide will walk you through setting up the Flutter Billing App and completing your first checkout flow, from initialization to printing a receipt.
+
+<Note>
+  The entire checkout process works **offline** using local Hive database storage. No internet connection required.
+</Note>
+
+## Before You Begin
+
+Ensure you have completed the [installation steps](/getting-started/installation) and the app is running on your device.
+
+## Application Initialization
+
+The app initializes in `lib/main.dart` with the following startup sequence:
+
+```dart lib/main.dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await HiveDatabase.init();
+  await di.init();
+  runApp(const MyApp());
+}
+```
+
+<Steps>
+  <Step title="Hive Database Initialization">
+    The local database is initialized first, registering adapters and opening boxes:
+
+    ```dart lib/core/data/hive_database.dart
+    static Future<void> init() async {
+      await Hive.initFlutter();
+
+      // Register Adapters
+      Hive.registerAdapter(ProductModelAdapter());
+      Hive.registerAdapter(ShopModelAdapter());
+
+      // Open Boxes
+      await Hive.openBox<ProductModel>(productBoxName);
+      await Hive.openBox<ShopModel>(shopBoxName);
+      await Hive.openBox(settingsBoxName);
+    }
+    ```
+
+    Three boxes are created:
+    - **products**: Stores product inventory
+    - **shop**: Stores shop details
+    - **settings**: Stores app settings and printer config
+  </Step>
+
+  <Step title="Dependency Injection Setup">
+    The service locator registers all repositories, use cases, and BLoCs:
+
+    ```dart lib/core/service_locator.dart
+    final sl = GetIt.instance;
+
+    Future<void> init() async {
+      // Register BLoCs
+      sl.registerFactory(() => ProductBloc(...));
+      sl.registerFactory(() => ShopBloc(...));
+      sl.registerFactory(() => BillingBloc(...));
+      sl.registerFactory(() => PrinterBloc(...));
+
+      // Register Use Cases
+      sl.registerLazySingleton(() => GetProductsUseCase(sl()));
+      sl.registerLazySingleton(() => AddProductUseCase(sl()));
+      // ... more use cases
+
+      // Register Repositories
+      sl.registerLazySingleton<ProductRepository>(
+        () => ProductRepositoryImpl(),
+      );
+      // ... more repositories
+    }
+    ```
+  </Step>
+
+  <Step title="BLoC Providers">
+    All BLoCs are provided at the app level with initial events:
+
+    ```dart lib/main.dart
+    MultiBlocProvider(
+      providers: [
+        BlocProvider<ProductBloc>(
+          create: (context) => di.sl<ProductBloc>()..add(LoadProducts())
+        ),
+        BlocProvider<ShopBloc>(
+          create: (context) => di.sl<ShopBloc>()..add(LoadShopEvent())
+        ),
+        BlocProvider<BillingBloc>(
+          create: (context) => BillingBloc(getProductByBarcodeUseCase: di.sl())
+        ),
+        BlocProvider<PrinterBloc>(
+          create: (context) => di.sl<PrinterBloc>()..add(InitPrinterEvent())
+        ),
+      ],
+      child: MaterialApp.router(...)
+    )
+    ```
+  </Step>
+</Steps>
+
+## Your First Checkout Flow
+
+<Steps>
+  <Step title="Add Products to Inventory">
+    Before scanning, you need products in your database:
+
+    1. Navigate to the **Products** section from settings
+    2. Tap **Add Product**
+    3. Enter product details:
+       - Product name
+       - Price
+       - Barcode (scan or enter manually)
+    4. Save the product
+
+    <Tip>
+      You can scan the barcode directly when adding a product using the camera button.
+    </Tip>
+  </Step>
+
+  <Step title="Configure Shop Details">
+    Set up your shop information for receipts:
+
+    1. Navigate to **Settings** → **Shop Details**
+    2. Configure:
+       - Shop name
+       - Address lines
+       - Phone number
+       - UPI ID (for payment QR codes)
+       - Footer text
+
+    This information will appear on printed receipts.
+  </Step>
+
+  <Step title="Start Scanning Products">
+    The home page features a camera-based barcode scanner:
+
+    ```dart lib/features/billing/presentation/pages/home_page.dart
+    void _onDetect(BarcodeCapture capture) async {
+      final List<Barcode> barcodes = capture.barcodes;
+      final now = DateTime.now();
+
+      for (final barcode in barcodes) {
+        if (barcode.rawValue != null) {
+          final rawValue = barcode.rawValue!;
+
+          // Cooldown logic: 2 seconds per identical barcode
+          if (_lastScanTimes.containsKey(rawValue)) {
+            final lastScan = _lastScanTimes[rawValue]!;
+            if (now.difference(lastScan).inSeconds < 2) {
+              continue;
+            }
+          }
+
+          _lastScanTimes[rawValue] = now;
+
+          // Vibrate
+          final hasVibrator = await Vibration.hasVibrator();
+          if (hasVibrator == true) {
+            Vibration.vibrate();
+          }
+
+          if (mounted) {
+            context.read<BillingBloc>().add(ScanBarcodeEvent(rawValue));
+          }
+          break;
+        }
+      }
+    }
+    ```
+
+    **Scanner Features:**
+    - Point camera at product barcode
+    - Product automatically added to cart
+    - Haptic feedback on successful scan
+    - 2-second cooldown prevents duplicate scans
+    - Toggle flashlight for low-light conditions
+    - Turn camera on/off to save battery
+  </Step>
+
+  <Step title="Manage Cart Items">
+    Scanned items appear in the bottom panel:
+
+    - **Adjust quantity**: Use +/- buttons
+    - **Remove items**: Decrease quantity to 0
+    - **View total**: Real-time price calculation
+
+    The cart displays:
+    - Product name and price
+    - Quantity controls
+    - Item subtotal
+    - Grand total
+  </Step>
+
+  <Step title="Review Order">
+    When ready to checkout:
+
+    1. Tap **Review Order** button at the bottom
+    2. You'll navigate to the checkout page
+    3. View complete order summary with:
+       - All cart items
+       - Individual prices
+       - Grand total
+       - UPI payment QR code (if configured)
+  </Step>
+
+  <Step title="Print Receipt">
+    Complete the transaction by printing:
+
+    ```dart lib/features/billing/presentation/pages/checkout_page.dart
+    PrimaryButton(
+      onPressed: () {
+        if (shopState is ShopLoaded) {
+          context.read<BillingBloc>().add(
+            PrintReceiptEvent(
+              shopName: shopState.shop.name,
+              address1: shopState.shop.addressLine1,
+              address2: shopState.shop.addressLine2,
+              phone: shopState.shop.phoneNumber,
+              footer: shopState.shop.footerText
+            )
+          );
+        }
+      },
+      label: 'Print Receipt',
+      icon: Icons.print,
+      isLoading: billingState.isPrinting,
+    )
+    ```
+
+    1. Ensure Bluetooth printer is connected (see [Configuration](/getting-started/configuration))
+    2. Tap **Print Receipt**
+    3. Physical receipt is printed with:
+       - Shop header details
+       - Itemized product list
+       - Total amount
+       - Footer message
+       - Timestamp
+  </Step>
+</Steps>
+
+## Understanding the Architecture
+
+The app follows **Clean Architecture** with feature-first organization:
+
+```text
+lib/
+├── core/                       # Shared utilities
+│   ├── data/                   # Hive initialization
+│   ├── error/                  # Failure models
+│   ├── usecase/                # Base UseCase contracts
+│   ├── utils/                  # Helpers
+│   └── service_locator.dart    # Dependency injection
+│
+└── features/                   # Feature modules
+    ├── billing/                # POS operations
+    │   ├── data/
+    │   ├── domain/
+    │   └── presentation/
+    ├── product/                # Inventory
+    ├── settings/               # App config
+    └── shop/                   # Shop details
+```
+
+Each feature has three layers:
+- **Domain**: Business logic and use cases
+- **Data**: Repositories and data sources
+- **Presentation**: UI and BLoC state management
+
+## Key Features in Action
+
+<CardGroup cols={2}>
+  <Card title="Offline-First" icon="wifi-slash">
+    All data stored locally in Hive NoSQL database. Works without internet.
+  </Card>
+  <Card title="Barcode Scanning" icon="barcode">
+    Camera-based scanning with `mobile_scanner` and haptic feedback.
+  </Card>
+  <Card title="Thermal Printing" icon="print">
+    Direct Bluetooth integration with POS thermal printers.
+  </Card>
+  <Card title="State Management" icon="cubes">
+    BLoC pattern with `flutter_bloc` for predictable state updates.
+  </Card>
+</CardGroup>
+
+## Common Workflows
+
+<AccordionGroup>
+  <Accordion title="Adding Products with Barcode">
+    1. Navigate to Products → Add Product
+    2. Tap barcode scan icon
+    3. Scan product barcode
+    4. Enter product name and price
+    5. Save to local database
+  </Accordion>
+
+  <Accordion title="Processing Multiple Items">
+    1. Start from home screen
+    2. Scan first product barcode
+    3. Continue scanning additional items
+    4. Adjust quantities as needed
+    5. Review order and print receipt
+  </Accordion>
+
+  <Accordion title="Connecting Bluetooth Printer">
+    1. Navigate to Settings
+    2. Select Bluetooth Printer
+    3. Scan for devices
+    4. Connect to your thermal printer
+    5. Test print to verify connection
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/getting-started/configuration">
+    Configure shop settings, printer, and app preferences
+  </Card>
+  <Card title="Product Management" icon="box" href="/features/product-management">
+    Learn advanced product management features
+  </Card>
+</CardGroup>
+
+<Check>
+  **Congratulations!** You've completed your first checkout. The app is now ready for production use.
+</Check>

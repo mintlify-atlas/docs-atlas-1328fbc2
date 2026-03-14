@@ -1,0 +1,828 @@
+---
+title: 'Testing Guidelines'
+description: 'Testing strategies and best practices for the Flutter Billing App'
+icon: 'flask-vial'
+---
+
+## Overview
+
+Testing is critical for maintaining code quality and ensuring Clean Architecture boundaries are respected. This guide covers testing strategies for each layer of the application.
+
+<Info>
+  The project is configured with `flutter_test` for unit and widget testing.
+</Info>
+
+## Test Environment Setup
+
+### Dependencies
+
+The following test dependencies are configured in `pubspec.yaml`:
+
+```yaml pubspec.yaml (dev_dependencies)
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.8
+```
+
+### Running Tests
+
+<CodeGroup>
+
+```bash Run All Tests
+flutter test
+```
+
+```bash Run Specific Test File
+flutter test test/features/product/domain/usecases/get_product_test.dart
+```
+
+```bash Run with Coverage
+flutter test --coverage
+```
+
+```bash Run in Watch Mode
+flutter test --watch
+```
+
+</CodeGroup>
+
+<Tip>
+  Use `flutter test --watch` during development for instant feedback on code changes.
+</Tip>
+
+## Test Structure
+
+### Directory Organization
+
+```text Test Directory Structure
+test/
+├── fixtures/                    # Test data (JSON, mock data)
+│   └── product.json
+├── helpers/                     # Test helpers and utilities
+│   └── test_helper.dart
+├── core/
+│   ├── error/
+│   │   └── failure_test.dart
+│   └── usecase/
+│       └── usecase_test.dart
+└── features/
+    ├── product/
+    │   ├── data/
+    │   │   ├── models/
+    │   │   │   └── product_model_test.dart
+    │   │   └── repositories/
+    │   │       └── product_repository_impl_test.dart
+    │   ├── domain/
+    │   │   ├── entities/
+    │   │   │   └── product_test.dart
+    │   │   └── usecases/
+    │   │       └── get_product_by_barcode_test.dart
+    │   └── presentation/
+    │       ├── bloc/
+    │       │   └── product_bloc_test.dart
+    │       └── pages/
+    │           └── product_page_test.dart
+    └── billing/
+        └── [...similar structure]
+```
+
+<Note>
+  Mirror the `lib/` directory structure in `test/` for easy navigation.
+</Note>
+
+## Testing by Layer
+
+### 1. Domain Layer Testing
+
+Domain layer tests are the **most important** as they verify business logic without framework dependencies.
+
+<Tabs>
+  <Tab title="Entity Tests">
+    ```dart test/features/billing/domain/entities/cart_item_test.dart
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:billing_app/features/billing/domain/entities/cart_item.dart';
+    import 'package:billing_app/features/product/domain/entities/product.dart';
+
+    void main() {
+      group('CartItem', () {
+        const testProduct = Product(
+          id: '1',
+          name: 'Test Product',
+          barcode: '12345',
+          price: 10.0,
+          stock: 100,
+        );
+
+        test('should calculate total correctly', () {
+          const cartItem = CartItem(
+            product: testProduct,
+            quantity: 3,
+          );
+
+          expect(cartItem.total, 30.0);
+        });
+
+        test('should default quantity to 1', () {
+          const cartItem = CartItem(product: testProduct);
+
+          expect(cartItem.quantity, 1);
+        });
+
+        test('copyWith should update only specified fields', () {
+          const cartItem = CartItem(
+            product: testProduct,
+            quantity: 2,
+          );
+
+          final updated = cartItem.copyWith(quantity: 5);
+
+          expect(updated.quantity, 5);
+          expect(updated.product, testProduct); // Unchanged
+        });
+
+        test('should support value equality via Equatable', () {
+          const item1 = CartItem(product: testProduct, quantity: 2);
+          const item2 = CartItem(product: testProduct, quantity: 2);
+          const item3 = CartItem(product: testProduct, quantity: 3);
+
+          expect(item1, item2);          // Equal
+          expect(item1, isNot(item3));   // Not equal
+        });
+      });
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Use Case Tests">
+    ```dart test/features/product/domain/usecases/get_product_by_barcode_test.dart
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:fpdart/fpdart.dart';
+    import 'package:mocktail/mocktail.dart';
+    import 'package:billing_app/core/error/failure.dart';
+    import 'package:billing_app/features/product/domain/entities/product.dart';
+    import 'package:billing_app/features/product/domain/repositories/product_repository.dart';
+    import 'package:billing_app/features/product/domain/usecases/product_usecases.dart';
+
+    class MockProductRepository extends Mock implements ProductRepository {}
+
+    void main() {
+      late GetProductByBarcodeUseCase useCase;
+      late MockProductRepository mockRepository;
+
+      setUp(() {
+        mockRepository = MockProductRepository();
+        useCase = GetProductByBarcodeUseCase(mockRepository);
+      });
+
+      const testBarcode = '12345';
+      const testProduct = Product(
+        id: '1',
+        name: 'Test Product',
+        barcode: testBarcode,
+        price: 10.0,
+        stock: 100,
+      );
+
+      test('should return product when repository call succeeds', () async {
+        // Arrange
+        when(() => mockRepository.getProductByBarcode(testBarcode))
+            .thenAnswer((_) async => const Right(testProduct));
+
+        // Act
+        final result = await useCase(testBarcode);
+
+        // Assert
+        expect(result, const Right(testProduct));
+        verify(() => mockRepository.getProductByBarcode(testBarcode)).called(1);
+      });
+
+      test('should return CacheFailure when product not found', () async {
+        // Arrange
+        const failure = CacheFailure('Product not found');
+        when(() => mockRepository.getProductByBarcode(testBarcode))
+            .thenAnswer((_) async => const Left(failure));
+
+        // Act
+        final result = await useCase(testBarcode);
+
+        // Assert
+        expect(result, const Left(failure));
+        verify(() => mockRepository.getProductByBarcode(testBarcode)).called(1);
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Card title="Testing Principle" icon="lightbulb">
+  Use cases should be tested with **mocked repositories** to isolate business logic.
+</Card>
+
+### 2. Data Layer Testing
+
+<Tabs>
+  <Tab title="Model Tests">
+    ```dart test/features/product/data/models/product_model_test.dart
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:billing_app/features/product/data/models/product_model.dart';
+    import 'package:billing_app/features/product/domain/entities/product.dart';
+
+    void main() {
+      group('ProductModel', () {
+        const testProductModel = ProductModel(
+          id: '1',
+          name: 'Test Product',
+          barcode: '12345',
+          price: 10.0,
+          stock: 100,
+        );
+
+        test('should be a subclass of Product entity', () {
+          expect(testProductModel, isA<Product>());
+        });
+
+        test('fromEntity should create ProductModel from Product', () {
+          const product = Product(
+            id: '1',
+            name: 'Test Product',
+            barcode: '12345',
+            price: 10.0,
+            stock: 100,
+          );
+
+          final model = ProductModel.fromEntity(product);
+
+          expect(model.id, product.id);
+          expect(model.name, product.name);
+          expect(model.barcode, product.barcode);
+          expect(model.price, product.price);
+          expect(model.stock, product.stock);
+        });
+
+        test('toEntity should return Product instance', () {
+          final entity = testProductModel.toEntity();
+
+          expect(entity, isA<Product>());
+          expect(entity.id, testProductModel.id);
+          expect(entity.name, testProductModel.name);
+        });
+      });
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Repository Tests">
+    ```dart test/features/product/data/repositories/product_repository_impl_test.dart
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:fpdart/fpdart.dart';
+    import 'package:hive/hive.dart';
+    import 'package:mocktail/mocktail.dart';
+    import 'package:billing_app/core/error/failure.dart';
+    import 'package:billing_app/features/product/data/models/product_model.dart';
+    import 'package:billing_app/features/product/data/repositories/product_repository_impl.dart';
+
+    class MockHiveBox extends Mock implements Box<ProductModel> {}
+
+    void main() {
+      late ProductRepositoryImpl repository;
+      late MockHiveBox mockBox;
+
+      setUp(() {
+        mockBox = MockHiveBox();
+        // Inject mocked box via dependency injection
+        repository = ProductRepositoryImpl();
+      });
+
+      group('getProductByBarcode', () {
+        const testBarcode = '12345';
+        const testProduct = ProductModel(
+          id: '1',
+          name: 'Test Product',
+          barcode: testBarcode,
+          price: 10.0,
+          stock: 100,
+        );
+
+        test('should return Right(Product) when product exists', () async {
+          // Arrange
+          when(() => mockBox.values).thenReturn([testProduct]);
+
+          // Act
+          final result = await repository.getProductByBarcode(testBarcode);
+
+          // Assert
+          expect(result.isRight(), true);
+          result.fold(
+            (failure) => fail('Should not return failure'),
+            (product) => expect(product.barcode, testBarcode),
+          );
+        });
+
+        test('should return Left(CacheFailure) when product not found', () async {
+          // Arrange
+          when(() => mockBox.values).thenReturn([]);
+
+          // Act
+          final result = await repository.getProductByBarcode(testBarcode);
+
+          // Assert
+          expect(result.isLeft(), true);
+          result.fold(
+            (failure) => expect(failure, isA<CacheFailure>()),
+            (_) => fail('Should not return product'),
+          );
+        });
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  **Hive Testing:** Use mocked Hive boxes. Never access real Hive storage in unit tests.
+</Warning>
+
+### 3. Presentation Layer Testing
+
+<Tabs>
+  <Tab title="BLoC Tests">
+    ```dart test/features/billing/presentation/bloc/billing_bloc_test.dart
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:bloc_test/bloc_test.dart';
+    import 'package:fpdart/fpdart.dart';
+    import 'package:mocktail/mocktail.dart';
+    import 'package:billing_app/features/billing/presentation/bloc/billing_bloc.dart';
+    import 'package:billing_app/features/product/domain/entities/product.dart';
+    import 'package:billing_app/features/product/domain/usecases/product_usecases.dart';
+    import 'package:billing_app/core/error/failure.dart';
+
+    class MockGetProductByBarcodeUseCase extends Mock 
+        implements GetProductByBarcodeUseCase {}
+
+    void main() {
+      late BillingBloc bloc;
+      late MockGetProductByBarcodeUseCase mockUseCase;
+
+      setUp(() {
+        mockUseCase = MockGetProductByBarcodeUseCase();
+        bloc = BillingBloc(getProductByBarcodeUseCase: mockUseCase);
+      });
+
+      tearDown(() {
+        bloc.close();
+      });
+
+      const testProduct = Product(
+        id: '1',
+        name: 'Test Product',
+        barcode: '12345',
+        price: 10.0,
+        stock: 100,
+      );
+
+      group('AddProductToCartEvent', () {
+        blocTest<BillingBloc, BillingState>(
+          'should add product to empty cart',
+          build: () => bloc,
+          act: (bloc) => bloc.add(const AddProductToCartEvent(testProduct)),
+          expect: () => [
+            predicate<BillingState>((state) {
+              return state.cartItems.length == 1 &&
+                     state.cartItems.first.product == testProduct &&
+                     state.cartItems.first.quantity == 1;
+            }),
+          ],
+        );
+
+        blocTest<BillingBloc, BillingState>(
+          'should increment quantity when adding existing product',
+          build: () => bloc,
+          seed: () => const BillingState(cartItems: [
+            CartItem(product: testProduct, quantity: 1),
+          ]),
+          act: (bloc) => bloc.add(const AddProductToCartEvent(testProduct)),
+          expect: () => [
+            predicate<BillingState>((state) {
+              return state.cartItems.length == 1 &&
+                     state.cartItems.first.quantity == 2;
+            }),
+          ],
+        );
+      });
+
+      group('ScanBarcodeEvent', () {
+        blocTest<BillingBloc, BillingState>(
+          'should add product when scan succeeds',
+          build: () {
+            when(() => mockUseCase('12345'))
+                .thenAnswer((_) async => const Right(testProduct));
+            return bloc;
+          },
+          act: (bloc) => bloc.add(const ScanBarcodeEvent('12345')),
+          expect: () => [
+            predicate<BillingState>((state) => state.cartItems.length == 1),
+          ],
+          verify: (_) {
+            verify(() => mockUseCase('12345')).called(1);
+          },
+        );
+
+        blocTest<BillingBloc, BillingState>(
+          'should emit error when product not found',
+          build: () {
+            when(() => mockUseCase('99999'))
+                .thenAnswer((_) async => const Left(CacheFailure('Not found')));
+            return bloc;
+          },
+          act: (bloc) => bloc.add(const ScanBarcodeEvent('99999')),
+          expect: () => [
+            predicate<BillingState>((state) => 
+              state.error != null && state.error!.contains('Product not found')),
+          ],
+        );
+      });
+
+      group('ClearCartEvent', () {
+        blocTest<BillingBloc, BillingState>(
+          'should reset to initial state',
+          build: () => bloc,
+          seed: () => const BillingState(cartItems: [
+            CartItem(product: testProduct, quantity: 2),
+          ]),
+          act: (bloc) => bloc.add(const ClearCartEvent()),
+          expect: () => [const BillingState()],
+        );
+      });
+    }
+    ```
+    
+    <Info>
+      Use `bloc_test` package for easier BLoC testing:
+      ```yaml
+      dev_dependencies:
+        bloc_test: ^9.1.0
+      ```
+    </Info>
+  </Tab>
+  
+  <Tab title="Widget Tests">
+    ```dart test/features/billing/presentation/pages/checkout_page_test.dart
+    import 'package:flutter/material.dart';
+    import 'package:flutter_test/flutter_test.dart';
+    import 'package:flutter_bloc/flutter_bloc.dart';
+    import 'package:mocktail/mocktail.dart';
+    import 'package:billing_app/features/billing/presentation/bloc/billing_bloc.dart';
+    import 'package:billing_app/features/billing/presentation/pages/checkout_page.dart';
+
+    class MockBillingBloc extends MockBloc<BillingEvent, BillingState> 
+        implements BillingBloc {}
+
+    void main() {
+      late MockBillingBloc mockBloc;
+
+      setUp(() {
+        mockBloc = MockBillingBloc();
+      });
+
+      Widget createWidgetUnderTest() {
+        return MaterialApp(
+          home: BlocProvider<BillingBloc>(
+            create: (_) => mockBloc,
+            child: const CheckoutPage(),
+          ),
+        );
+      }
+
+      testWidgets('should display empty cart message when cart is empty', 
+          (WidgetTester tester) async {
+        // Arrange
+        when(() => mockBloc.state).thenReturn(const BillingState());
+
+        // Act
+        await tester.pumpWidget(createWidgetUnderTest());
+
+        // Assert
+        expect(find.text('Your cart is empty'), findsOneWidget);
+      });
+
+      testWidgets('should display cart items when cart has items', 
+          (WidgetTester tester) async {
+        // Arrange
+        const testState = BillingState(cartItems: [
+          CartItem(
+            product: Product(
+              id: '1',
+              name: 'Test Product',
+              barcode: '12345',
+              price: 10.0,
+              stock: 100,
+            ),
+            quantity: 2,
+          ),
+        ]);
+        when(() => mockBloc.state).thenReturn(testState);
+
+        // Act
+        await tester.pumpWidget(createWidgetUnderTest());
+
+        // Assert
+        expect(find.text('Test Product'), findsOneWidget);
+        expect(find.text('₹10.0'), findsOneWidget);
+      });
+
+      testWidgets('should trigger ClearCartEvent when clear button pressed', 
+          (WidgetTester tester) async {
+        // Arrange
+        when(() => mockBloc.state).thenReturn(const BillingState());
+
+        // Act
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.tap(find.byIcon(Icons.delete));
+        await tester.pump();
+
+        // Assert
+        verify(() => mockBloc.add(const ClearCartEvent())).called(1);
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Testing Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Arrange-Act-Assert" icon="1">
+    Structure tests clearly:
+    ```dart
+    test('description', () {
+      // Arrange: Set up test data
+      const input = 'test';
+      
+      // Act: Execute the code
+      final result = function(input);
+      
+      // Assert: Verify results
+      expect(result, expected);
+    });
+    ```
+  </Card>
+  
+  <Card title="Mock External Dependencies" icon="2">
+    Use `mocktail` for mocking:
+    ```dart
+    class MockRepository extends Mock 
+        implements ProductRepository {}
+    
+    when(() => mock.method())
+        .thenAnswer((_) async => result);
+    ```
+  </Card>
+  
+  <Card title="Test Edge Cases" icon="3">
+    Cover boundary conditions:
+    - Empty lists
+    - Null values
+    - Error scenarios
+    - Invalid input
+  </Card>
+  
+  <Card title="Descriptive Test Names" icon="4">
+    Use clear naming:
+    ```dart
+    test('should return Right(Product) when product exists')
+    test('should emit error when barcode invalid')
+    test('copyWith should update only specified fields')
+    ```
+  </Card>
+</CardGroup>
+
+## Mocking with Mocktail
+
+<Info>
+  Add `mocktail` to your dev dependencies:
+  ```yaml
+  dev_dependencies:
+    mocktail: ^1.0.0
+  ```
+</Info>
+
+### Common Mocking Patterns
+
+<Tabs>
+  <Tab title="Basic Mocking">
+    ```dart Creating Mocks
+    import 'package:mocktail/mocktail.dart';
+
+    // Create mock classes
+    class MockProductRepository extends Mock implements ProductRepository {}
+    class MockHiveBox extends Mock implements Box<ProductModel> {}
+    
+    // In setUp
+    late MockProductRepository mockRepo;
+    
+    setUp(() {
+      mockRepo = MockProductRepository();
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Stubbing Methods">
+    ```dart When/ThenAnswer
+    // Stub method to return value
+    when(() => mockRepo.getProduct('1'))
+        .thenAnswer((_) async => const Right(product));
+    
+    // Stub to throw exception
+    when(() => mockRepo.getProduct('invalid'))
+        .thenThrow(Exception('Not found'));
+    
+    // Stub with dynamic return based on input
+    when(() => mockRepo.getProduct(any()))
+        .thenAnswer((invocation) async {
+          final id = invocation.positionalArguments[0] as String;
+          return id == '1' ? Right(product) : Left(failure);
+        });
+    ```
+  </Tab>
+  
+  <Tab title="Verification">
+    ```dart Verify Calls
+    // Verify method was called
+    verify(() => mockRepo.getProduct('1')).called(1);
+    
+    // Verify never called
+    verifyNever(() => mockRepo.deleteProduct(any()));
+    
+    // Verify call order
+    verifyInOrder([
+      () => mockRepo.getProduct('1'),
+      () => mockRepo.updateProduct(product),
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+## Test Coverage
+
+### Generating Coverage Reports
+
+<Steps>
+  <Step title="Run Tests with Coverage">
+    ```bash
+    flutter test --coverage
+    ```
+  </Step>
+  
+  <Step title="Generate HTML Report">
+    ```bash
+    # Install lcov (Linux/Mac)
+    genhtml coverage/lcov.info -o coverage/html
+    
+    # Open report
+    open coverage/html/index.html
+    ```
+  </Step>
+</Steps>
+
+<Card title="Coverage Goals" icon="bullseye">
+  - **Domain Layer:** 90%+ coverage (critical business logic)
+  - **Data Layer:** 80%+ coverage
+  - **Presentation Layer:** 70%+ coverage (BLoCs)
+</Card>
+
+## Testing Checklist
+
+<AccordionGroup>
+  <Accordion title="Domain Layer" icon="check">
+    - [ ] Entity equality and props
+    - [ ] Entity copyWith methods
+    - [ ] Computed properties (getters)
+    - [ ] Use case happy path
+    - [ ] Use case failure scenarios
+    - [ ] Repository interface contracts
+  </Accordion>
+  
+  <Accordion title="Data Layer" icon="check">
+    - [ ] Model to/from entity conversion
+    - [ ] Repository implementation success cases
+    - [ ] Repository implementation failure cases
+    - [ ] Hive box interactions (mocked)
+    - [ ] Error handling and Either returns
+  </Accordion>
+  
+  <Accordion title="Presentation Layer" icon="check">
+    - [ ] BLoC initial state
+    - [ ] BLoC event handlers
+    - [ ] BLoC state emissions
+    - [ ] BLoC error states
+    - [ ] Widget rendering
+    - [ ] User interactions
+    - [ ] Navigation flows
+  </Accordion>
+</AccordionGroup>
+
+## Common Testing Patterns
+
+### Testing Either Results
+
+```dart Either Testing Helpers
+// Helper to extract Right value
+T getRightValue<L, T>(Either<L, T> either) {
+  return either.fold(
+    (l) => throw Exception('Expected Right but got Left: $l'),
+    (r) => r,
+  );
+}
+
+// Helper to extract Left value
+L getLeftValue<L, T>(Either<L, T> either) {
+  return either.fold(
+    (l) => l,
+    (r) => throw Exception('Expected Left but got Right: $r'),
+  );
+}
+
+// Usage in tests
+test('should return product', () async {
+  final result = await useCase('123');
+  final product = getRightValue(result);
+  expect(product.id, '123');
+});
+
+test('should return failure', () async {
+  final result = await useCase('invalid');
+  final failure = getLeftValue(result);
+  expect(failure, isA<CacheFailure>());
+});
+```
+
+### Testing Equatable
+
+```dart Equatable Tests
+test('should support value equality', () {
+  const item1 = CartItem(product: product1, quantity: 2);
+  const item2 = CartItem(product: product1, quantity: 2);
+  const item3 = CartItem(product: product1, quantity: 3);
+
+  // Same values = equal
+  expect(item1, equals(item2));
+  expect(item1.hashCode, equals(item2.hashCode));
+  
+  // Different values = not equal
+  expect(item1, isNot(equals(item3)));
+});
+```
+
+## Debugging Tests
+
+<Tabs>
+  <Tab title="Print Debugging">
+    ```dart
+    test('debug test', () {
+      print('State: ${bloc.state}');
+      print('Items: ${bloc.state.cartItems}');
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Verbose Output">
+    ```bash
+    flutter test --verbose
+    ```
+  </Tab>
+  
+  <Tab title="Single Test">
+    ```dart
+    // Add .only to run single test
+    testWidgets.only('this test only', (tester) async {
+      // ...
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Remove `.only` before committing - it will cause CI to fail.
+</Warning>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Flutter Testing Docs" icon="book" href="https://docs.flutter.dev/testing">
+    Official Flutter testing documentation
+  </Card>
+  
+  <Card title="BLoC Testing" icon="cube" href="https://pub.dev/packages/bloc_test">
+    bloc_test package documentation
+  </Card>
+  
+  <Card title="Mocktail" icon="flask" href="https://pub.dev/packages/mocktail">
+    Mocktail mocking library
+  </Card>
+  
+  <Card title="Test Coverage" icon="chart-line" href="https://docs.flutter.dev/testing/code-coverage">
+    Generating test coverage reports
+  </Card>
+</CardGroup>

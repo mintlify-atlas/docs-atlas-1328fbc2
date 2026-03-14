@@ -1,0 +1,146 @@
+---
+title: Introduction
+description: Welcome to Flutter Billing App - A complete offline-first POS and billing system for retail shops
+---
+
+<div className="bg-gradient-to-r from-[#3dcffb] to-[#085a9c] rounded-xl p-12 text-center shadow-2xl mb-8">
+  <h1 className="text-5xl font-bold text-white mb-4">Flutter Billing App</h1>
+  <p className="text-xl text-white/90 mb-6">
+    An offline-first Point of Sale (POS) and billing system for retail shops with barcode scanning and thermal receipt printing
+  </p>
+  <div className="flex gap-4 justify-center flex-wrap">
+    <a href="/getting-started/quickstart" className="bg-white text-[#1a73e8] px-6 py-3 rounded-[20px] font-bold hover:shadow-lg transition-shadow">
+      Get Started
+    </a>
+    <a href="https://github.com/Dinesh-Sowndar/flutter_billing_app" className="bg-transparent text-white border-2 border-white px-6 py-3 rounded-[20px] font-bold hover:bg-white/10 transition-colors">
+      View on GitHub
+    </a>
+  </div>
+</div>
+
+## What is Flutter Billing App?
+
+Flutter Billing App is a feature-rich, high-performance offline-first billing and Point of Sale (POS) application built with Flutter. Designed for seamless retail checkout operations, it features barcode scanning, thermal Bluetooth printing, and robust local data persistence.
+
+This application serves as a complete offline POS system for small to medium-sized retail shops, streamlining the checkout process, catalog management, and receipt generation entirely on-device.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Offline-First Architecture" icon="database" href="/features/product-management">
+    Powered by Hive for lightning-fast local NoSQL storage. No internet connection required
+  </Card>
+  <Card title="Barcode Scanning" icon="barcode" href="/features/barcode-scanning">
+    Camera-based barcode and QR code scanning for rapid product lookup
+  </Card>
+  <Card title="Thermal Printing" icon="print" href="/features/thermal-printing">
+    Direct Bluetooth integration with thermal printers for instant receipt output
+  </Card>
+  <Card title="Product Management" icon="box" href="/features/product-management">
+    Complete CRUD operations for inventory items with barcode support
+  </Card>
+  <Card title="Smart Checkout" icon="cash-register" href="/features/billing-checkout">
+    Rapid cart building with real-time order calculation and tax support
+  </Card>
+  <Card title="Shop Customization" icon="store" href="/features/shop-settings">
+    Centrally managed shop details printed dynamically on receipts
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+Built leveraging industry-standard architectural principles ensuring scalability, separation of concerns, and robust testability:
+
+- **Framework**: [Flutter](https://flutter.dev/) (SDK >=3.1.0)
+- **State Management**: `flutter_bloc` with BLoC pattern
+- **Dependency Injection**: `get_it` service locator
+- **Routing**: `go_router` for declarative navigation
+- **Local Database**: `hive` & `hive_flutter` for offline storage
+- **Functional Programming**: `fpdart` for error handling
+- **Hardware Integrations**: `mobile_scanner` (barcodes), `print_bluetooth_thermal`
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Rapid Billing Entry">
+    A cashier launches the app, navigates to the checkout page, and uses the device camera to instantly scan product barcodes. Products are added to the cart, the total is calculated including taxes, and a receipt is finalized.
+  </Accordion>
+  <Accordion title="Physical Receipt Generation">
+    After checkout confirmation, the app triggers a connected external Bluetooth thermal POS printer to instantly print an itemized paper receipt with the shop's header.
+  </Accordion>
+  <Accordion title="Inventory Management">
+    A manager opens the Product feature to add new stock to the local database, taking a picture of the barcode to bind the SKU for future lightning-fast checkouts.
+  </Accordion>
+  <Accordion title="No-Connection Operation">
+    The business operates a stall at an exhibition with poor networking. The app functions entirely via its embedded Hive local database and Bluetooth, completely undisturbed by network drops.
+  </Accordion>
+</AccordionGroup>
+
+## Architecture
+
+Flutter Billing App follows **Clean Architecture** principles with a **Feature-First** structure:
+
+```
+lib/
+├── core/                    # Shared utilities and components
+│   ├── data/               # Global data sources (Hive initialization)
+│   ├── error/              # Standardized Failure/Exception models
+│   ├── theme/              # UI aesthetics, typography, styling
+│   ├── usecase/            # Base UseCase contracts
+│   ├── utils/              # Helpers (PrinterHelper, formatters)
+│   └── widgets/            # Reusable UI widgets
+│
+└── features/               # Independent feature modules
+    ├── billing/            # Cart, Checkout, Invoice Generation
+    ├── product/            # Inventory management
+    ├── settings/           # Printer connections, App settings
+    └── shop/               # Shop details configuration
+```
+
+Each feature is subdivided into Clean Architecture layers: `data`, `domain`, and `presentation`.
+
+<Note>
+  Learn more about the architecture in the [Architecture Overview](/architecture) section.
+</Note>
+
+## Quick Start
+
+<Steps>
+  <Step title="Install Flutter SDK">
+    Ensure you have Flutter SDK ^3.1.0 or higher installed on your machine.
+  </Step>
+  <Step title="Clone and Install">
+    Clone the repository and install dependencies:
+    ```bash
+    git clone https://github.com/Dinesh-Sowndar/flutter_billing_app
+    cd flutter_billing_app
+    flutter pub get
+    ```
+  </Step>
+  <Step title="Generate Code">
+    Run code generation for Hive adapters and JSON serialization:
+    ```bash
+    dart run build_runner build --delete-conflicting-outputs
+    ```
+  </Step>
+  <Step title="Run the App">
+    Launch the app on your device or emulator:
+    ```bash
+    flutter run
+    ```
+  </Step>
+</Steps>
+
+## Ready to Get Started?
+
+<CardGroup cols={3}>
+  <Card title="Installation Guide" icon="download" href="/getting-started/installation">
+    Set up your development environment
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/getting-started/quickstart">
+    Build your first checkout flow
+  </Card>
+  <Card title="Architecture Guide" icon="sitemap" href="/development/clean-architecture">
+    Understand the codebase structure
+  </Card>
+</CardGroup>

@@ -1,0 +1,497 @@
+---
+title: Key Features
+description: Comprehensive overview of all features in the Flutter Billing App
+---
+
+The Flutter Billing App is a feature-rich, offline-first Point of Sale (POS) system designed for retail checkout operations. Built with clean architecture principles, it offers seamless product management, barcode scanning, and thermal receipt printing.
+
+## Core Features
+
+<CardGroup cols={2}>
+  <Card title="Product Management" icon="box">
+    Complete CRUD operations for inventory items with barcode/QR code support and local persistence.
+  </Card>
+  <Card title="Smart Checkout System" icon="cart-shopping">
+    Rapid cart building via camera-based barcode scanning or manual entry with real-time calculations.
+  </Card>
+  <Card title="Bluetooth Thermal Printing" icon="print">
+    Direct integration with thermal printers to instantly output physical receipts.
+  </Card>
+  <Card title="Offline-First Architecture" icon="database">
+    Powered by Hive for lightning-fast localized NoSQL data storage with no internet required.
+  </Card>
+</CardGroup>
+
+## Product Management System
+
+The product management feature provides complete inventory control with full CRUD operations.
+
+### Product Entity Structure
+
+Products are stored as immutable entities using Equatable for value comparison:
+
+```dart lib/features/product/domain/entities/product.dart
+class Product extends Equatable {
+  final String id;
+  final String name;
+  final String barcode;
+  final double price;
+  final int stock;
+
+  const Product({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.price,
+    this.stock = 0,
+  });
+
+  @override
+  List<Object?> get props => [id, name, barcode, price, stock];
+}
+```
+
+### Use Cases
+
+The product feature implements five domain use cases following Clean Architecture:
+
+<Steps>
+  <Step title="Get Products">
+    Retrieve all products from the local Hive database
+    
+    ```dart
+    class GetProductsUseCase implements UseCase<List<Product>, NoParams> {
+      final ProductRepository repository;
+      
+      @override
+      Future<Either<Failure, List<Product>>> call(NoParams params) {
+        return repository.getProducts();
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Add Product">
+    Add a new product to inventory with barcode association
+    
+    ```dart
+    class AddProductUseCase implements UseCase<void, Product> {
+      final ProductRepository repository;
+      
+      @override
+      Future<Either<Failure, void>> call(Product params) {
+        return repository.addProduct(params);
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Update Product">
+    Modify existing product details including price and stock
+  </Step>
+  
+  <Step title="Delete Product">
+    Remove products from the inventory by ID
+  </Step>
+  
+  <Step title="Get Product by Barcode">
+    Quick lookup of products during checkout scanning
+    
+    ```dart
+    class GetProductByBarcodeUseCase implements UseCase<Product, String> {
+      final ProductRepository repository;
+      
+      
+      @override
+      Future<Either<Failure, Product>> call(String params) {
+        return repository.getProductByBarcode(params);
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### State Management
+
+Product operations are managed through BLoC with distinct states:
+
+```dart
+enum ProductStatus { initial, loading, loaded, success, error }
+
+class ProductBloc extends Bloc<ProductEvent, ProductState> {
+  final GetProductsUseCase getProductsUseCase;
+  final AddProductUseCase addProductUseCase;
+  final UpdateProductUseCase updateProductUseCase;
+  final DeleteProductUseCase deleteProductUseCase;
+  
+  // Event handlers for all CRUD operations
+}
+```
+
+## Barcode Scanning
+
+The app features camera-based barcode scanning using the `mobile_scanner` package for rapid product lookup during checkout.
+
+### Scanner Implementation
+
+The scanner page provides real-time barcode detection with haptic feedback:
+
+```dart lib/features/billing/presentation/pages/scanner_page.dart
+class _ScannerPageState extends State<ScannerPage> {
+  final MobileScannerController controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    returnImage: false,
+  );
+  
+  void _onDetect(BarcodeCapture capture) async {
+    final List<Barcode> barcodes = capture.barcodes;
+    
+    for (final barcode in barcodes) {
+      if (barcode.rawValue != null) {
+        // Vibrate on successful scan
+        final hasVibrator = await Vibration.hasVibrator();
+        if (hasVibrator == true) {
+          Vibration.vibrate();
+        }
+        
+        if (mounted) {
+          context.pop(barcode.rawValue);
+        }
+        break;
+      }
+    }
+  }
+}
+```
+
+<Note>
+The scanner uses `DetectionSpeed.noDuplicates` to prevent multiple scans of the same barcode and provides visual feedback with a custom frame overlay.
+</Note>
+
+### Scan-to-Cart Flow
+
+When a barcode is scanned, the billing system automatically looks up the product and adds it to the cart:
+
+```dart lib/features/billing/presentation/bloc/billing_bloc.dart
+Future<void> _onScanBarcode(
+    ScanBarcodeEvent event, Emitter<BillingState> emit) async {
+  final result = await getProductByBarcodeUseCase(event.barcode);
+  result.fold(
+    (failure) => emit(state.copyWith(
+      error: 'Product not found: ${event.barcode}'
+    )),
+    (product) {
+      add(AddProductToCartEvent(product));
+    },
+  );
+}
+```
+
+## Shopping Cart & Checkout
+
+The billing feature manages cart operations with automatic quantity tracking and total calculation.
+
+### Cart Item Structure
+
+```dart lib/features/billing/domain/entities/cart_item.dart
+class CartItem extends Equatable {
+  final Product product;
+  final int quantity;
+
+  const CartItem({
+    required this.product,
+    this.quantity = 1,
+  });
+
+  double get total => product.price * quantity;
+
+  CartItem copyWith({
+    Product? product,
+    int? quantity,
+  }) {
+    return CartItem(
+      product: product ?? this.product,
+      quantity: quantity ?? this.quantity,
+    );
+  }
+}
+```
+
+### Cart Operations
+
+<Accordion title="Add to Cart">
+Automatically increments quantity if product already exists in cart:
+
+```dart
+void _onAddProductToCart(
+    AddProductToCartEvent event, Emitter<BillingState> emit) {
+  final existingIndex = state.cartItems
+      .indexWhere((item) => item.product.id == event.product.id);
+      
+  if (existingIndex >= 0) {
+    final existingItem = state.cartItems[existingIndex];
+    final updatedItems = List<CartItem>.from(state.cartItems);
+    updatedItems[existingIndex] = 
+        existingItem.copyWith(quantity: existingItem.quantity + 1);
+    emit(state.copyWith(cartItems: updatedItems));
+  } else {
+    final newItem = CartItem(product: event.product);
+    emit(state.copyWith(cartItems: [...state.cartItems, newItem]));
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Update Quantity">
+Modify item quantities with automatic removal when quantity reaches zero:
+
+```dart
+void _onUpdateQuantity(
+    UpdateQuantityEvent event, Emitter<BillingState> emit) {
+  if (event.quantity <= 0) {
+    add(RemoveProductFromCartEvent(event.productId));
+    return;
+  }
+  
+  final index = state.cartItems
+      .indexWhere((item) => item.product.id == event.productId);
+  if (index >= 0) {
+    final items = List<CartItem>.from(state.cartItems);
+    items[index] = items[index].copyWith(quantity: event.quantity);
+    emit(state.copyWith(cartItems: items));
+  }
+}
+```
+</Accordion>
+
+<Accordion title="Remove from Cart">
+Filter out items by product ID:
+
+```dart
+void _onRemoveProductFromCart(
+    RemoveProductFromCartEvent event, Emitter<BillingState> emit) {
+  final updatedList = state.cartItems
+      .where((item) => item.product.id != event.productId)
+      .toList();
+  emit(state.copyWith(cartItems: updatedList));
+}
+```
+</Accordion>
+
+## Bluetooth Thermal Printing
+
+The app integrates with Bluetooth thermal printers using the `print_bluetooth_thermal` package to generate physical receipts.
+
+### ESC/POS Commands
+
+Receipts are formatted using ESC/POS command sequences:
+
+```dart lib/core/utils/printer_helper.dart
+class EscPos {
+  static const List<int> init = [0x1B, 0x40];
+  static const List<int> alignCenter = [0x1B, 0x61, 0x01];
+  static const List<int> alignLeft = [0x1B, 0x61, 0x00];
+  static const List<int> alignRight = [0x1B, 0x61, 0x02];
+  static const List<int> boldOn = [0x1B, 0x45, 0x01];
+  static const List<int> boldOff = [0x1B, 0x45, 0x00];
+  static const List<int> textNormal = [0x1D, 0x21, 0x00];
+  static const List<int> textLarge = [0x1D, 0x21, 0x11];
+  static const List<int> lineFeed = [0x0A];
+}
+```
+
+### Receipt Generation
+
+Receipts include shop details, itemized products, and totals:
+
+```dart
+Future<void> printReceipt({
+  required String shopName,
+  required String address1,
+  required String address2,
+  required String phone,
+  required List<Map<String, dynamic>> items,
+  required double total,
+  required String footer,
+}) async {
+  List<int> bytes = [];
+  
+  // Shop header (centered, bold, large)
+  bytes += EscPos.init;
+  bytes += EscPos.alignCenter;
+  bytes += EscPos.boldOn;
+  bytes += EscPos.textLarge;
+  bytes += _textToBytes(shopName);
+  bytes += EscPos.lineFeed;
+  
+  // Address and phone
+  bytes += EscPos.textNormal;
+  bytes += EscPos.boldOff;
+  bytes += _textToBytes(address1);
+  bytes += EscPos.lineFeed;
+  
+  // Date and time
+  String formattedDate = DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.now());
+  bytes += _textToBytes(formattedDate);
+  bytes += EscPos.lineFeed;
+  
+  // Print items with alignment
+  // ...
+  
+  await PrintBluetoothThermal.writeBytes(bytes);
+}
+```
+
+<Warning>
+Ensure Bluetooth permissions are granted before attempting to connect to printers. The app requests `bluetooth`, `bluetoothScan`, `bluetoothConnect`, and `location` permissions.
+</Warning>
+
+### Printer Connection
+
+The app maintains a singleton PrinterHelper for managing connections:
+
+```dart
+class PrinterHelper {
+  static final PrinterHelper _instance = PrinterHelper._internal();
+  factory PrinterHelper() => _instance;
+  
+  bool _isConnected = false;
+  bool get isConnected => _isConnected;
+  
+  Future<bool> connect(String macAddress) async {
+    try {
+      final bool result = await PrintBluetoothThermal.connect(
+        macPrinterAddress: macAddress
+      );
+      _isConnected = result;
+      return result;
+    } catch (e) {
+      _isConnected = false;
+      return false;
+    }
+  }
+  
+  Future<List<BluetoothInfo>> getBondedDevices() async {
+    final List<BluetoothInfo> list = 
+        await PrintBluetoothThermal.pairedBluetooths;
+    return list;
+  }
+}
+```
+
+## Shop Configuration
+
+Customize shop details that appear on printed receipts.
+
+### Shop Entity
+
+```dart lib/features/shop/domain/entities/shop.dart
+class Shop extends Equatable {
+  final String name;
+  final String addressLine1;
+  final String addressLine2;
+  final String phoneNumber;
+  final String upiId;
+  final String footerText;
+
+  const Shop({
+    this.name = '',
+    this.addressLine1 = '',
+    this.addressLine2 = '',
+    this.phoneNumber = '',
+    this.upiId = '',
+    this.footerText = '',
+  });
+}
+```
+
+Shop information is persisted locally using Hive and dynamically inserted into receipts during printing.
+
+## Offline-First Data Persistence
+
+All data is stored locally using Hive, a fast NoSQL database for Flutter.
+
+### Database Initialization
+
+```dart lib/core/data/hive_database.dart
+class HiveDatabase {
+  static const String productBoxName = 'products';
+  static const String shopBoxName = 'shop';
+  static const String settingsBoxName = 'settings';
+
+  static Future<void> init() async {
+    await Hive.initFlutter();
+
+    // Register Adapters
+    Hive.registerAdapter(ProductModelAdapter());
+    Hive.registerAdapter(ShopModelAdapter());
+
+    // Open Boxes
+    await Hive.openBox<ProductModel>(productBoxName);
+    await Hive.openBox<ShopModel>(shopBoxName);
+    await Hive.openBox(settingsBoxName);
+  }
+  
+  static Box<ProductModel> get productBox => 
+      Hive.box<ProductModel>(productBoxName);
+  static Box<ShopModel> get shopBox => 
+      Hive.box<ShopModel>(shopBoxName);
+  static Box get settingsBox => 
+      Hive.box(settingsBoxName);
+}
+```
+
+<Note>
+The database is initialized in `main.dart` before the app starts, ensuring all boxes are ready for immediate access.
+</Note>
+
+## Navigation
+
+The app uses `go_router` for declarative routing with deep linking support.
+
+```dart lib/config/routes/app_routes.dart
+final router = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomePage(),
+      routes: [
+        GoRoute(
+          path: 'scanner',
+          builder: (context, state) => const ScannerPage(),
+        ),
+        GoRoute(
+          path: 'checkout',
+          builder: (context, state) => const CheckoutPage(),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/products',
+      builder: (context, state) => const ProductListPage(),
+      routes: [
+        GoRoute(
+          path: 'add',
+          builder: (context, state) => const AddProductPage(),
+        ),
+        GoRoute(
+          path: 'edit/:id',
+          builder: (context, state) {
+            final product = state.extra as Product?;
+            return EditProductPage(product: product);
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/shop',
+      builder: (context, state) => const ShopDetailsPage(),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (context, state) => const SettingsPage(),
+    ),
+  ],
+);
+```

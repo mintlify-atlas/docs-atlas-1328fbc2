@@ -1,0 +1,414 @@
+---
+title: Shop Settings
+description: Configure shop details, business information, and receipt customization
+icon: store
+---
+
+## Overview
+
+Shop Settings allow you to configure your business information that appears on receipts, UPI payment QR codes, and throughout the app.
+
+<CardGroup cols={2}>
+  <Card title="Business Profile" icon="building">
+    Set shop name, address, and contact details
+  </Card>
+  <Card title="UPI Integration" icon="qrcode">
+    Configure UPI ID for payment QR code generation
+  </Card>
+  <Card title="Receipt Footer" icon="message">
+    Customize the thank-you message on receipts
+  </Card>
+  <Card title="Persistent Storage" icon="database">
+    Settings saved locally using Hive database
+  </Card>
+</CardGroup>
+
+## Shop Data Model
+
+```dart lib/features/shop/domain/entities/shop.dart
+class Shop extends Equatable {
+  final String name;           // Shop name
+  final String addressLine1;   // Primary address
+  final String addressLine2;   // Secondary address (optional)
+  final String phoneNumber;    // Contact number
+  final String upiId;          // UPI ID for payments
+  final String footerText;     // Receipt footer message
+
+  const Shop({
+    this.name = '',
+    this.addressLine1 = '',
+    this.addressLine2 = '',
+    this.phoneNumber = '',
+    this.upiId = '',
+    this.footerText = '',
+  });
+}
+```
+
+## Configuring Shop Details
+
+### Accessing Settings
+
+<Steps>
+  <Step title="Open Settings">
+    From the home page, tap the Settings icon in the top-right corner
+  </Step>
+  
+  <Step title="Navigate to Shop Details">
+    Tap "Shop Details" under the Management section
+  </Step>
+  
+  <Step title="Fill in Information">
+    Complete the form with your business details
+  </Step>
+  
+  <Step title="Save Changes">
+    Tap "Save Details" at the bottom
+  </Step>
+</Steps>
+
+### Form Fields
+
+#### Shop Name (Required)
+- **Field**: Text input
+- **Example**: "QuickMart Superstore"
+- **Usage**: 
+  - Receipt header (large, bold, centered)
+  - UPI QR code payee name
+  - Settings page profile display
+
+#### Address Line 1 (Required)
+- **Field**: Text input
+- **Example**: "Samrajpet, Mecheri"
+- **Usage**: Primary address on receipt
+
+#### Address Line 2 (Optional)
+- **Field**: Text input
+- **Example**: "Salem - 636453"
+- **Usage**: Secondary address line on receipt
+
+#### Phone Number (Required)
+- **Field**: Phone input
+- **Example**: "+91 7010674588"
+- **Usage**: Contact info on receipt
+
+#### UPI ID (Optional)
+- **Field**: Text input
+- **Example**: "dineshsowndar@oksbi"
+- **Format**: `username@bankcode`
+- **Usage**: Generates UPI payment QR code on checkout
+
+<Note>
+If UPI ID is not provided, the payment QR code section will be hidden on the checkout page.
+</Note>
+
+#### Receipt Footer Text (Optional)
+- **Field**: Multiline text (max 60 characters)
+- **Example**: "Thank you, Visit again!!!"
+- **Usage**: Centered message at bottom of receipt
+
+## Settings Page UI
+
+The settings page displays:
+
+### Profile Section
+
+```dart lib/features/settings/presentation/pages/settings_page.dart
+Container(
+  width: 96,
+  height: 96,
+  decoration: BoxDecoration(
+      color: AppTheme.primaryColor,
+      shape: BoxShape.circle,
+      boxShadow: [
+        BoxShadow(
+          color: AppTheme.primaryColor.withValues(alpha: 0.2),
+          blurRadius: 15,
+          spreadRadius: 5,
+        )
+      ]),
+  alignment: Alignment.center,
+  child: Text(initials,
+      style: const TextStyle(
+          color: Colors.white,
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -1)),
+),
+```
+
+- **Avatar**: Circular badge with shop initials
+- **Shop Name**: Displayed below avatar in uppercase
+
+### Management Section
+
+- **Products**: Link to product management
+- **Shop Details**: Link to edit shop information
+
+### Hardware Section
+
+- **Print Device**: Printer connection status and controls
+
+## Shop Details Form Implementation
+
+```dart lib/features/shop/presentation/pages/shop_details_page.dart
+void _saveShop() {
+  if (_formKey.currentState!.validate()) {
+    final shop = Shop(
+      name: _nameController.text,
+      addressLine1: _address1Controller.text,
+      addressLine2: _address2Controller.text,
+      phoneNumber: _phoneController.text,
+      upiId: _upiController.text,
+      footerText: _footerController.text,
+    );
+
+    context.read<ShopBloc>().add(UpdateShopEvent(shop));
+  }
+}
+```
+
+### Form Validation
+
+```dart
+// Required fields
+TextFormField(
+  controller: _nameController,
+  validator: AppValidators.required('Required'),
+)
+
+// Optional fields (no validator)
+TextFormField(
+  controller: _upiController,
+  hint: 'dineshsowndar@oksbi',
+)
+```
+
+## State Management
+
+Shop data is managed using BLoC:
+
+### Events
+
+| Event | Description |
+|-------|-------------|
+| `LoadShopEvent` | Load shop details from Hive |
+| `UpdateShopEvent` | Save/update shop information |
+
+### States
+
+| State | Description |
+|-------|-------------|
+| `ShopLoading` | Loading shop data |
+| `ShopLoaded` | Shop data loaded successfully |
+| `ShopOperationSuccess` | Save operation completed |
+| `ShopError` | Error occurred |
+
+## Usage in App Features
+
+### Receipt Printing
+
+Shop details are passed to the printer:
+
+```dart lib/features/billing/presentation/pages/checkout_page.dart
+context.read<BillingBloc>().add(
+  PrintReceiptEvent(
+    shopName: shopState.shop.name,
+    address1: shopState.shop.addressLine1,
+    address2: shopState.shop.addressLine2,
+    phone: shopState.shop.phoneNumber,
+    footer: shopState.shop.footerText
+  )
+);
+```
+
+### UPI QR Code Generation
+
+```dart lib/features/billing/presentation/pages/checkout_page.dart
+upiId.isNotEmpty
+  ? Column(
+      children: [
+        const Text('Scan to Pay', style: TextStyle(...)),
+        SizedBox(
+          width: 180,
+          height: 180,
+          child: PrettyQrView.data(
+            data: 'upi://pay?pa=$upiId&pn=$shopName&am=${billingState.totalAmount.toStringAsFixed(2)}&cu=INR',
+          ),
+        ),
+      ],
+    )
+  : const SizedBox.shrink()
+```
+
+### Profile Display
+
+Shop name generates initials for avatar:
+
+```dart
+String shopName = 'Elite Groceries';
+String initials = 'EG';
+if (state is ShopLoaded && state.shop.name.isNotEmpty) {
+  shopName = state.shop.name;
+  final parts = shopName.split(' ');
+  initials = parts
+      .take(2)
+      .map((p) => p.isNotEmpty ? p[0].toUpperCase() : '')
+      .join('');
+  if (initials.isEmpty) initials = 'S';
+}
+```
+
+## Data Persistence
+
+Shop settings are stored in Hive database:
+
+- **Box Name**: Usually a dedicated shop settings box
+- **Storage**: Local device storage
+- **Auto-load**: Settings load on app startup
+- **Sync**: No cloud sync (local only)
+
+## Workflow Example
+
+### Initial Setup
+
+<Steps>
+  <Step title="First Launch">
+    App shows default/empty shop details
+  </Step>
+  
+  <Step title="Open Settings">
+    Navigate to Settings > Shop Details
+  </Step>
+  
+  <Step title="Enter Business Info">
+    Fill in:
+    - Shop Name: "Elite Groceries"
+    - Address Line 1: "Samrajpet, Mecheri"
+    - Address Line 2: "Salem - 636453"
+    - Phone: "+91 7010674588"
+    - UPI ID: "elitegroceries@paytm"
+    - Footer: "Thank you for shopping with us!"
+  </Step>
+  
+  <Step title="Save">
+    Tap "Save Details" button
+  </Step>
+  
+  <Step title="Verify">
+    - Settings page shows shop name in profile
+    - Checkout page displays UPI QR code
+    - Print receipt includes all details
+  </Step>
+</Steps>
+
+## Form UI Components
+
+### Input Labels
+
+```dart
+const InputLabel(text: 'Shop Name')
+```
+
+### Text Fields
+
+```dart
+TextFormField(
+  controller: _nameController,
+  textCapitalization: TextCapitalization.words,
+  validator: AppValidators.required('Required'),
+  decoration: InputDecoration(
+    hintText: 'e.g. QuickMart Superstore',
+  ),
+)
+```
+
+### Section Headers
+
+```dart
+Text('General Information',
+  style: TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 1.2,
+    color: AppTheme.primaryColor.withValues(alpha: 0.8),
+  )
+)
+```
+
+### Helper Text
+
+```dart
+Text(
+  'These details will appear on your digital and printed receipts.',
+  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+)
+```
+
+## Validation Rules
+
+<AccordionGroup>
+  <Accordion title="Shop Name">
+    - Required field
+    - No length limit
+    - Capitalized words
+    - Used in multiple places (receipts, QR codes, profile)
+  </Accordion>
+  
+  <Accordion title="Address Lines">
+    - Address Line 1: Required
+    - Address Line 2: Optional
+    - Free text format
+    - Appears on receipt in order entered
+  </Accordion>
+  
+  <Accordion title="Phone Number">
+    - Required field
+    - Phone keyboard type
+    - No format validation (accepts any format)
+    - Include country code for international
+  </Accordion>
+  
+  <Accordion title="UPI ID">
+    - Optional
+    - Format: `username@bankcode`
+    - No validation enforced
+    - Controls QR code visibility
+  </Accordion>
+  
+  <Accordion title="Footer Text">
+    - Optional
+    - Max 60 characters
+    - 2 lines max in UI
+    - Centered on receipt
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Check>Complete all required fields before printing receipts</Check>
+<Check>Use proper capitalization for professional appearance</Check>
+<Check>Include country code in phone number (+91 for India)</Check>
+<Check>Test UPI QR code with actual UPI app before going live</Check>
+<Check>Keep footer text short and friendly (under 60 chars)</Check>
+<Check>Update address if business relocates</Check>
+
+## Troubleshooting
+
+<Warning>
+  **UPI QR Code Not Showing**
+  
+  Ensure UPI ID field is filled in Shop Details. Empty UPI ID hides the QR code section.
+</Warning>
+
+<Warning>
+  **Receipt Missing Information**
+  
+  If receipt prints with missing shop details, verify all fields are saved in Shop Details page.
+</Warning>
+
+## Navigation
+
+- **Settings Page**: `/settings`
+- **Shop Details**: `/shop`
+- **Access**: Home → Settings → Shop Details

@@ -1,0 +1,137 @@
+---
+title: Adding Products to Inventory
+description: Learn how to add new products to your inventory using barcode scanning or manual entry
+---
+
+The Flutter Billing App allows you to easily add products to your inventory using barcode scanning or manual entry. This guide walks you through the complete process.
+
+## Opening the Product Management Page
+
+<Steps>
+  <Step title="Navigate to Settings">
+    From the home screen, tap the **Settings** icon in the top-right corner of the scanner view.
+  </Step>
+  
+  <Step title="Select Products">
+    In the Settings page, tap on **Products** under the Management section. This will show you all existing products and options to manage them.
+  </Step>
+</Steps>
+
+## Adding a New Product
+
+<Steps>
+  <Step title="Tap the Add Button">
+    On the Product Management page, tap the floating **+** button in the bottom-right corner. This opens the Add Product form.
+    
+    <Note>
+      The floating action button is styled in your app's primary color with a white plus icon.
+    </Note>
+  </Step>
+  
+  <Step title="Enter or Scan Barcode">
+    You have two options for entering the barcode:
+    
+    **Option 1: Scan with Camera**
+    - Tap the **QR code scanner** icon next to the barcode field
+    - Point your camera at the product barcode
+    - The barcode value will automatically populate the field
+    
+    **Option 2: Manual Entry**
+    - Type the barcode directly into the barcode field
+    - This is useful if the barcode is damaged or hard to scan
+    
+    <Warning>
+      Each barcode must be unique. If you try to add a product with an existing barcode, you'll see an error: "Product with barcode \"XXX\" already exists!"
+    </Warning>
+  </Step>
+  
+  <Step title="Enter Product Name">
+    Type the product name in the **Product Name** field. 
+    
+    **Tips:**
+    - Use clear, descriptive names (e.g., "Basmati Rice" instead of just "Rice")
+    - The field automatically capitalizes the first letter of each word
+    - Product names are required and cannot be empty
+  </Step>
+  
+  <Step title="Set the Price">
+    Enter the product price in the **Price** field.
+    
+    **Format:**
+    - Enter price with decimals (e.g., 299.99)
+    - The currency symbol ₹ is automatically added
+    - Price must be a valid positive number
+    
+    <Info>
+      The price you set here will be used during checkout calculations.
+    </Info>
+  </Step>
+  
+  <Step title="Save the Product">
+    Tap the **Add Product** button at the bottom of the screen.
+    
+    The product is immediately saved and you'll be returned to the Product Management page where you can see your new product in the list.
+  </Step>
+</Steps>
+
+## Viewing Your Products
+
+After adding products, they appear in the Product Management page with the following information:
+
+<CardGroup cols={2}>
+  <Card title="Product Name" icon="tag">
+    Displayed prominently at the top of each product card
+  </Card>
+  <Card title="Price" icon="indian-rupee-sign">
+    Shown in ₹ format with two decimal places
+  </Card>
+  <Card title="Edit Option" icon="pen-to-square">
+    Blue edit icon to modify product details
+  </Card>
+  <Card title="Delete Option" icon="trash">
+    Red delete icon to remove products
+  </Card>
+</CardGroup>
+
+## Searching for Products
+
+The Product Management page includes a search feature:
+
+- Use the search bar at the top to filter products by name or barcode
+- Tap the **QR scanner icon** to scan a barcode and automatically search for that product
+- The list updates in real-time as you type
+
+<Tip>
+  If no products match your search, you'll see the message "No products match your search."
+</Tip>
+
+## What Happens Next
+
+Once products are added to your inventory:
+
+1. They become available for scanning during checkout
+2. When you scan their barcode on the home screen, they're automatically added to the cart
+3. The product name and price are displayed on receipts
+4. You can edit or delete them anytime from the Product Management page
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Barcode scanner not working">
+    Make sure you've granted camera permissions to the app. The scanner requires camera access to read barcodes.
+  </Accordion>
+  
+  <Accordion title="Duplicate barcode error">
+    Each product must have a unique barcode. If you see this error, check if the product already exists or use a different barcode.
+  </Accordion>
+  
+  <Accordion title="Price validation error">
+    Ensure you're entering a valid number format. Use decimals for cents (e.g., 99.50 not 99.5).
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="Managing Inventory" icon="boxes-stacked" href="/guides/managing-inventory">
+  Learn how to edit, update, and delete products from your inventory
+</Card>

@@ -1,0 +1,217 @@
+---
+title: Product Management
+description: Manage your product catalog with barcode support and CRUD operations
+icon: qr-code
+---
+
+## Overview
+
+The Product Management feature enables you to maintain a complete product catalog with barcode integration. Products are stored locally using Hive database and support full CRUD operations.
+
+<CardGroup cols={2}>
+  <Card title="Barcode Scanning" icon="barcode">
+    Scan barcodes using the device camera to quickly add or search products
+  </Card>
+  <Card title="CRUD Operations" icon="database">
+    Create, read, update, and delete products with simple UI
+  </Card>
+  <Card title="Search & Filter" icon="magnifying-glass">
+    Search products by name or barcode in real-time
+  </Card>
+  <Card title="Validation" icon="shield-check">
+    Built-in validation prevents duplicate barcodes and invalid data
+  </Card>
+</CardGroup>
+
+## Product Data Model
+
+Each product in the system contains the following attributes:
+
+```dart lib/features/product/domain/entities/product.dart
+class Product extends Equatable {
+  final String id;        // Unique identifier (UUID)
+  final String name;      // Product name
+  final String barcode;   // Barcode (unique)
+  final double price;     // Price in rupees
+  final int stock;        // Stock quantity (optional)
+
+  const Product({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.price,
+    this.stock = 0,
+  });
+}
+```
+
+## User Workflows
+
+### Adding a New Product
+
+<Steps>
+  <Step title="Open Product Management">
+    Navigate to Settings > Products from the home screen
+  </Step>
+  
+  <Step title="Tap Add Button">
+    Tap the floating action button (+) at the bottom right
+  </Step>
+  
+  <Step title="Scan or Enter Barcode">
+    Either:
+    - Tap the QR scanner icon to open camera and scan the barcode
+    - Manually enter the barcode in the text field
+    
+    The app validates that the barcode is unique
+  </Step>
+  
+  <Step title="Enter Product Details">
+    Fill in the required fields:
+    - **Product Name**: e.g., "Basmati Rice"
+    - **Price**: Enter price in rupees (e.g., 150.00)
+  </Step>
+  
+  <Step title="Save Product">
+    Tap "Add Product" button to save to the database
+  </Step>
+</Steps>
+
+### Editing a Product
+
+<Steps>
+  <Step title="Find Product">
+    Use the search bar to find the product by name or barcode
+  </Step>
+  
+  <Step title="Tap Edit Icon">
+    Tap the edit icon (pencil) on the product card
+  </Step>
+  
+  <Step title="Modify Details">
+    Update the product name or price
+    
+    <Note>Barcodes cannot be edited after creation</Note>
+  </Step>
+  
+  <Step title="Save Changes">
+    Tap "Save Changes" to update the product
+  </Step>
+</Steps>
+
+### Deleting a Product
+
+<Steps>
+  <Step title="Locate Product">
+    Find the product in the list or use search
+  </Step>
+  
+  <Step title="Tap Delete Icon">
+    Tap the delete icon (trash) on the product card
+  </Step>
+  
+  <Step title="Confirm Deletion">
+    Confirm the deletion in the dialog that appears
+  </Step>
+</Steps>
+
+## Implementation Details
+
+### Product List Page
+
+The product list features:
+
+- **Real-time Search**: Filter products as you type
+- **Barcode Scanner Integration**: Quick search via QR scanner
+- **Card Layout**: Each product displays name and price
+- **Action Buttons**: Edit and delete icons on each card
+
+```dart lib/features/product/presentation/pages/product_list_page.dart
+void _scanQR(List<Product> products) async {
+  final barcode = await context.push<String>('/scanner');
+  if (barcode != null && barcode.isNotEmpty) {
+    final matchedProduct = products
+        .where((p) => p.barcode == barcode)
+        .firstOrNull;
+    if (matchedProduct != null) {
+      _searchController.text = matchedProduct.name;
+    } else {
+      _searchController.text = barcode;
+    }
+  }
+}
+```
+
+### Add Product Form
+
+Key validation rules:
+
+```dart lib/features/product/presentation/pages/add_product_page.dart
+void _submit() {
+  if (_formKey.currentState!.validate()) {
+    _formKey.currentState!.save();
+
+    // Check for duplicate barcode
+    final productState = context.read<ProductBloc>().state;
+    final existingProduct = productState.products
+        .where((p) => p.barcode == _barcode)
+        .firstOrNull;
+
+    if (existingProduct != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Product with barcode "$_barcode" already exists!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final product = Product(
+      id: const Uuid().v4(),
+      name: _name,
+      barcode: _barcode,
+      price: _price,
+    );
+
+    context.read<ProductBloc>().add(AddProduct(product));
+    context.pop();
+  }
+}
+```
+
+## State Management
+
+Products are managed using BLoC pattern with the following events:
+
+- `LoadProducts`: Load all products from database
+- `AddProduct`: Add a new product
+- `UpdateProduct`: Update existing product
+- `DeleteProduct`: Remove a product
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Barcode Scanner">
+    Always use the barcode scanner when possible to avoid typos and ensure accuracy
+  </Accordion>
+  
+  <Accordion title="Unique Barcodes">
+    Ensure each product has a unique barcode. The system prevents duplicates automatically
+  </Accordion>
+  
+  <Accordion title="Descriptive Names">
+    Use clear, descriptive product names that are easy to search and identify
+  </Accordion>
+  
+  <Accordion title="Accurate Pricing">
+    Double-check prices before saving. Price changes require editing the product
+  </Accordion>
+</AccordionGroup>
+
+## Navigation
+
+- **From Home**: Settings → Products
+- **Route**: `/products`
+- **Add Product**: `/products/add`
+- **Edit Product**: `/products/edit/:id`

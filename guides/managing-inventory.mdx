@@ -1,0 +1,361 @@
+---
+title: Managing Product Inventory
+description: Learn how to edit, update, delete, and search products in your inventory
+---
+
+Effective inventory management is crucial for smooth checkout operations. This guide covers all inventory management features including editing products, updating prices, searching, and deleting items.
+
+## Accessing Product Management
+
+<Steps>
+  <Step title="Open Settings">
+    From the home screen, tap the **Settings** icon in the top-right corner of the scanner view.
+  </Step>
+  
+  <Step title="Navigate to Products">
+    Under the **Management** section, tap on **Products**.
+    
+    The subtitle reads: "Manage stock and barcodes"
+  </Step>
+  
+  <Step title="View Product List">
+    You'll see all your products displayed as cards with:
+    - Product name (bold, prominent)
+    - Price in ₹ format
+    - Edit and Delete action buttons
+  </Step>
+</Steps>
+
+## Searching and Filtering Products
+
+The Product Management page includes powerful search capabilities.
+
+### Text Search
+
+<Steps>
+  <Step title="Use the Search Bar">
+    At the top of the Product Management page, you'll find a search bar with the placeholder "Scan or enter barcode."
+  </Step>
+  
+  <Step title="Type to Filter">
+    Start typing a product name or barcode.
+    
+    The product list filters in real-time as you type, showing only matching items.
+    
+    **Search matches:**
+    - Product names (case-insensitive)
+    - Barcodes (exact or partial match)
+    
+    <Tip>
+      The search automatically capitalizes the first letter of each word for product names.
+    </Tip>
+  </Step>
+  
+  <Step title="View Results">
+    As you type, the list updates to show only products that match your query.
+    
+    If no products match, you'll see: "No products match your search."
+  </Step>
+</Steps>
+
+### Barcode Search
+
+<Steps>
+  <Step title="Tap Scanner Icon">
+    Next to the search bar, tap the **QR code scanner** icon (blue background).
+  </Step>
+  
+  <Step title="Scan a Barcode">
+    Point your camera at any product barcode.
+    
+    When scanned:
+    - If the product exists, the search bar auto-fills with the product name
+    - If the product doesn't exist, the barcode value is placed in the search bar
+  </Step>
+  
+  <Step title="View Matching Product">
+    The product list filters to show the scanned product, making it easy to quickly locate and edit items.
+  </Step>
+</Steps>
+
+## Editing Product Details
+
+You can update product names and prices at any time.
+
+<Steps>
+  <Step title="Find the Product">
+    Use the search feature or scroll through the product list to find the item you want to edit.
+  </Step>
+  
+  <Step title="Tap Edit Icon">
+    On the product card, tap the **blue edit icon** (pencil) on the right side.
+    
+    This opens the Edit Product page.
+  </Step>
+  
+  <Step title="Review Barcode (Immutable)">
+    At the top of the Edit page, you'll see a blue-highlighted box displaying the product's barcode.
+    
+    <Warning>
+      **Barcodes cannot be changed** once a product is created. If you need a different barcode, you must delete this product and create a new one.
+    </Warning>
+  </Step>
+  
+  <Step title="Update Product Name">
+    The **Product Name** field shows the current name.
+    
+    - Tap the field to edit
+    - Change the name as needed
+    - The field auto-capitalizes words
+    - Names cannot be empty
+  </Step>
+  
+  <Step title="Update Price">
+    The **Price** field shows the current price.
+    
+    - Tap to edit the price
+    - Enter the new price with decimals (e.g., 349.99)
+    - The ₹ symbol is automatically added
+    - Price must be a valid positive number
+    
+    <Info>
+      Price changes take effect immediately after saving. Future scans will use the new price.
+    </Info>
+  </Step>
+  
+  <Step title="Save Changes">
+    Tap the **Save Changes** button at the bottom of the screen.
+    
+    You'll be returned to the Product Management page with a success message.
+  </Step>
+</Steps>
+
+## Deleting Products
+
+Remove products that are no longer sold or were added by mistake.
+
+<Steps>
+  <Step title="Locate the Product">
+    Find the product you want to delete using search or by scrolling through the list.
+  </Step>
+  
+  <Step title="Tap Delete Icon">
+    On the product card, tap the **red delete icon** (trash can) on the right side.
+    
+    A confirmation dialog appears.
+  </Step>
+  
+  <Step title="Confirm Deletion">
+    The dialog asks: "Are you sure you want to delete [Product Name]?"
+    
+    **Options:**
+    - **Cancel**: Keep the product and close the dialog
+    - **Delete**: Permanently remove the product (red text)
+    
+    <Warning>
+      Deletion is permanent and cannot be undone. Deleted products must be re-added manually if needed.
+    </Warning>
+  </Step>
+  
+  <Step title="Product Removed">
+    After confirming, the product is immediately removed from your inventory.
+    
+    A success message confirms the deletion.
+  </Step>
+</Steps>
+
+## Understanding Product Display
+
+Each product in the list is displayed as a card with the following elements:
+
+### Card Layout
+
+<Tabs>
+  <Tab title="Product Information">
+    **Left Side:**
+    - Product name (16px, bold weight)
+    - Price in ₹ with 2 decimal places (gray text)
+  </Tab>
+  
+  <Tab title="Action Buttons">
+    **Right Side:**
+    - **Edit button**: Blue icon with rounded background
+    - **Delete button**: Red icon with rounded background
+    
+    Both buttons are 8px apart for easy tapping
+  </Tab>
+</Tabs>
+
+### Visual Design
+
+- **White background** with rounded corners (12px radius)
+- **Light gray border** for subtle separation
+- **Box shadow** for depth (4px blur, 2px offset)
+- **12px spacing** between cards for clean layout
+
+## Empty States
+
+### No Products Added
+
+If you haven't added any products yet:
+
+```
+No products found. Add some!
+```
+
+Tap the floating **+** button to add your first product.
+
+### No Search Results
+
+When search filters don't match any products:
+
+```
+No products match your search.
+```
+
+Clear the search or try different keywords.
+
+## Best Practices for Inventory Management
+
+<CardGroup cols={2}>
+  <Card title="Regular Price Updates" icon="arrows-rotate">
+    Review and update prices regularly to reflect market changes and special offers.
+  </Card>
+  <Card title="Descriptive Names" icon="pen-fancy">
+    Use clear, descriptive product names to avoid confusion during checkout.
+  </Card>
+  <Card title="Remove Discontinued Items" icon="trash-can">
+    Delete products you no longer sell to keep the inventory clean and manageable.
+  </Card>
+  <Card title="Batch Processing" icon="layer-group">
+    Use the search feature to quickly find and update multiple related products.
+  </Card>
+</CardGroup>
+
+## Tips for Efficient Management
+
+<Steps>
+  <Step title="Use Consistent Naming">
+    Develop a naming convention for products:
+    - Include brand names when relevant
+    - Use standard abbreviations
+    - Be consistent with capitalization
+    
+    **Example:** "Basmati Rice 5kg" instead of "rice" or "RICE"
+  </Step>
+  
+  <Step title="Verify Prices Before Saving">
+    Double-check price updates to avoid customer disputes:
+    - Ensure decimal placement is correct
+    - Verify against current market prices
+    - Update related product prices together
+  </Step>
+  
+  <Step title="Clean Up Regularly">
+    Schedule weekly or monthly inventory reviews:
+    - Remove discontinued products
+    - Update seasonal pricing
+    - Verify all barcodes scan correctly
+  </Step>
+  
+  <Step title="Test After Changes">
+    After making significant updates:
+    - Scan a few products on the home screen
+    - Verify prices display correctly
+    - Test checkout to confirm calculations
+  </Step>
+</Steps>
+
+## Common Inventory Tasks
+
+<AccordionGroup>
+  <Accordion title="Bulk price increase for multiple products">
+    Currently, the app doesn't support bulk editing. To update multiple products:
+    
+    1. Use search to find related products
+    2. Edit each product individually
+    3. Update the price and save
+    4. Repeat for all products in the category
+  </Accordion>
+  
+  <Accordion title="Changing a product's barcode">
+    Barcodes cannot be modified after creation. To change a barcode:
+    
+    1. Note the product's current name and price
+    2. Delete the product from inventory
+    3. Add a new product with the correct barcode
+    4. Set the same name and price
+    
+    <Warning>
+      Make sure no one is scanning the old barcode during this process.
+    </Warning>
+  </Accordion>
+  
+  <Accordion title="Recovering deleted products">
+    Deleted products cannot be recovered. You must manually re-add them:
+    
+    1. Go to Product Management
+    2. Tap the + button
+    3. Re-enter all product details
+    4. Scan or type the barcode
+    5. Save the product
+    
+    <Tip>
+      Consider keeping a backup list of important products and their details outside the app.
+    </Tip>
+  </Accordion>
+  
+  <Accordion title="Handling products with the same name">
+    You can have multiple products with the same name if they have different barcodes.
+    
+    **Example:** "Basmati Rice" can exist with different barcodes for 1kg, 5kg, and 10kg packages.
+    
+    Each barcode is unique and links to its specific product entry with its own price.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+### Validation Errors
+
+When editing products, you might encounter these validation errors:
+
+<Warning>
+  **"Please enter a name"** - Product name field is empty
+  
+  **"Please enter a valid price"** - Price field is empty or contains invalid characters
+  
+  **"Product with barcode \"XXX\" already exists"** - Attempted to add duplicate barcode (on new product only)
+</Warning>
+
+### Success Messages
+
+When operations complete successfully:
+
+<Check>**Product updated** - Changes saved successfully</Check>
+<Check>**Product deleted** - Item removed from inventory</Check>
+<Check>**Product added** - New item created successfully</Check>
+
+## Data Persistence
+
+All inventory data is stored locally on your device using Hive database:
+
+- **Automatic saving**: Changes are saved immediately
+- **Offline-first**: No internet connection required
+- **Device-specific**: Data doesn't sync across devices
+- **Persistent**: Data survives app restarts and updates
+
+<Info>
+  Currently, there's no cloud sync or backup feature. Make sure to keep your device safe and consider periodically documenting your product list.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Adding Products" icon="plus" href="/guides/adding-products">
+    Learn how to add new products to your inventory
+  </Card>
+  <Card title="Checkout Process" icon="cart-shopping" href="/guides/checkout-process">
+    Master the checkout workflow from scanning to payment
+  </Card>
+</CardGroup>

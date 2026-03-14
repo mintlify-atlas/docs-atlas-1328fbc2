@@ -1,0 +1,343 @@
+---
+title: Routing Setup
+description: go_router navigation configuration in the Flutter Billing App
+---
+
+## Overview
+
+The Flutter Billing App uses **go_router** for declarative routing and navigation. This package provides type-safe navigation, deep linking support, and nested routes.
+
+## Router Configuration
+
+### File Location
+
+`lib/config/routes/app_routes.dart`
+
+### Router Setup
+
+```dart lib/config/routes/app_routes.dart
+import 'package:go_router/go_router.dart';
+
+final router = GoRouter(
+  initialLocation: '/',
+  routes: [
+    // Routes defined here
+  ],
+);
+```
+
+## Route Structure
+
+The app uses a hierarchical route structure with nested child routes:
+
+```dart
+GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomePage(),
+      routes: [
+        GoRoute(
+          path: 'scanner',
+          builder: (context, state) => const ScannerPage(),
+        ),
+        GoRoute(
+          path: 'checkout',
+          builder: (context, state) => const CheckoutPage(),
+        ),
+      ],
+    ),
+    // Other routes...
+  ],
+);
+```
+
+<Note>
+  Nested routes automatically inherit their parent's path. For example, `scanner` becomes `/scanner` under the `/` parent.
+</Note>
+
+## Route Definitions
+
+### Home & Billing Routes
+
+```dart
+GoRoute(
+  path: '/',
+  builder: (context, state) => const HomePage(),
+  routes: [
+    GoRoute(
+      path: 'scanner',
+      builder: (context, state) => const ScannerPage(),
+    ),
+    GoRoute(
+      path: 'checkout',
+      builder: (context, state) => const CheckoutPage(),
+    ),
+  ],
+),
+```
+
+| Route | Full Path | Page | Purpose |
+|-------|-----------|------|----------|
+| `/` | `/` | `HomePage` | Main billing page with barcode scanner |
+| `scanner` | `/scanner` | `ScannerPage` | Dedicated fullscreen scanner |
+| `checkout` | `/checkout` | `CheckoutPage` | Review and complete billing |
+
+### Product Management Routes
+
+```dart
+GoRoute(
+  path: '/products',
+  builder: (context, state) => const ProductListPage(),
+  routes: [
+    GoRoute(
+      path: 'add',
+      builder: (context, state) => const AddProductPage(),
+    ),
+    GoRoute(
+      path: 'edit/:id',
+      builder: (context, state) {
+        final product = state.extra as Product?;
+        if (product == null) {
+          return const ProductListPage();
+        }
+        return EditProductPage(product: product);
+      },
+    ),
+  ],
+),
+```
+
+<AccordionGroup>
+  <Accordion title="Product Routes Breakdown">
+    - `/products` - View all products in inventory
+    - `/products/add` - Add a new product
+    - `/products/edit/:id` - Edit an existing product (requires product data via `extra`)
+  </Accordion>
+</AccordionGroup>
+
+### Settings & Shop Routes
+
+```dart
+GoRoute(
+  path: '/settings',
+  builder: (context, state) => const SettingsPage(),
+),
+GoRoute(
+  path: '/shop',
+  builder: (context, state) => const ShopDetailsPage(),
+),
+```
+
+## Navigation Methods
+
+### Basic Navigation
+
+#### Push (Navigate Forward)
+
+```dart
+// Navigate to a new route
+context.push('/products');
+
+// With async/await for result
+final result = await context.push('/checkout');
+```
+
+#### Go (Replace Current Route)
+
+```dart
+// Replace current route in history
+context.go('/settings');
+```
+
+#### Pop (Go Back)
+
+```dart
+// Return to previous route
+context.pop();
+
+// Pop with result
+context.pop(result);
+```
+
+### Passing Data Between Routes
+
+#### Using Path Parameters
+
+```dart
+// Define route with parameter
+GoRoute(
+  path: 'edit/:id',
+  builder: (context, state) {
+    final id = state.pathParameters['id'];
+    // Use id...
+  },
+)
+
+// Navigate with parameter
+context.push('/products/edit/product-123');
+```
+
+#### Using Extra Data
+
+```dart
+// Navigate with complex object
+context.push('/products/edit/123', extra: product);
+
+// Retrieve in builder
+builder: (context, state) {
+  final product = state.extra as Product?;
+  if (product == null) {
+    // Handle missing data
+    return const ProductListPage();
+  }
+  return EditProductPage(product: product);
+}
+```
+
+<Warning>
+  Always check if `extra` is null when using it for navigation, especially for deep links where extra data won't be available.
+</Warning>
+
+## Real-World Examples
+
+### Scanner Navigation with Pause/Resume
+
+```dart lib/features/billing/presentation/pages/home_page.dart
+PrimaryButton(
+  onPressed: state.cartItems.isEmpty
+      ? null
+      : () async {
+          // Pause scanner before navigation
+          _scannerController.stop();
+          
+          // Navigate to checkout
+          await context.push('/checkout');
+          
+          // Resume scanner after returning
+          if (_isCameraOn && mounted) {
+            _scannerController.start();
+          }
+        },
+  label: 'Review Order',
+)
+```
+
+<Tip>
+  Always stop the camera scanner before navigating to prevent battery drain and performance issues.
+</Tip>
+
+### Settings Navigation
+
+```dart
+IconButton(
+  icon: Icon(Icons.settings),
+  onPressed: () async {
+    _scannerController.stop();
+    await context.push('/settings');
+    if (_isCameraOn && mounted) _scannerController.start();
+  },
+)
+```
+
+## Integration with MaterialApp
+
+In your `main.dart`, integrate the router:
+
+```dart
+import 'package:flutter/material.dart';
+import 'config/routes/app_routes.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      routerConfig: router,
+      title: 'Billing App',
+      theme: AppTheme.lightTheme,
+    );
+  }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use context.push for Stack" icon="layer-plus">
+    Use `context.push()` when you want users to navigate back to the current page
+  </Card>
+  
+  <Card title="Use context.go for Replacement" icon="arrow-right-arrow-left">
+    Use `context.go()` to replace the current route in the navigation stack
+  </Card>
+  
+  <Card title="Check mounted Before Navigation" icon="check-double">
+    Always check `if (mounted)` before navigating after async operations
+  </Card>
+  
+  <Card title="Handle Null Extra Data" icon="shield-halved">
+    Always provide fallback behavior when `state.extra` is null for deep linking support
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Navigation with State Management
+
+```dart
+// Clear cart after successful checkout
+ElevatedButton(
+  onPressed: () {
+    context.read<BillingBloc>().add(ClearCartEvent());
+    context.go('/'); // Return to home
+  },
+  child: const Text('Complete'),
+)
+```
+
+### Conditional Navigation
+
+```dart
+// Only allow navigation if cart has items
+PrimaryButton(
+  onPressed: state.cartItems.isEmpty ? null : () {
+    context.push('/checkout');
+  },
+  label: 'Checkout',
+)
+```
+
+## Deep Linking Support
+
+go_router automatically handles deep links. The fallback pattern ensures the app doesn't crash:
+
+```dart
+builder: (context, state) {
+  final product = state.extra as Product?;
+  if (product == null) {
+    // User opened /products/edit/:id via deep link
+    // Redirect to products list since we don't have product data
+    return const ProductListPage();
+  }
+  return EditProductPage(product: product);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="/development/database">
+    Learn how to fetch data for navigation
+  </Card>
+  
+  <Card title="Error Handling" icon="shield-halved" href="/development/error-handling">
+    Handle navigation errors gracefully
+  </Card>
+</CardGroup>

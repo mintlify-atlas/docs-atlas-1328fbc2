@@ -1,0 +1,331 @@
+---
+title: Bluetooth Printer Setup
+description: Complete guide to connecting and configuring Bluetooth thermal printers for receipt printing
+---
+
+The Flutter Billing App supports Bluetooth thermal printers for printing customer receipts. This guide walks you through the complete setup process.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+<CardGroup cols={2}>
+  <Card title="Compatible Printer" icon="print">
+    A Bluetooth thermal printer (58mm or 80mm width)
+  </Card>
+  <Card title="Charged Printer" icon="battery-full">
+    Printer should be powered on with sufficient battery or AC power
+  </Card>
+  <Card title="Thermal Paper" icon="receipt">
+    Loaded with thermal receipt paper
+  </Card>
+  <Card title="Bluetooth Enabled" icon="bluetooth">
+    Bluetooth must be enabled on your phone
+  </Card>
+</CardGroup>
+
+## Understanding Printer Permissions
+
+The app requires several permissions to connect to Bluetooth printers:
+
+- **Bluetooth**: Basic Bluetooth connectivity (Android 11 and below)
+- **Bluetooth Scan**: Discover nearby Bluetooth devices (Android 12+)
+- **Bluetooth Connect**: Connect to paired devices (Android 12+)
+- **Location**: Required by Android for Bluetooth scanning
+
+<Info>
+  The app automatically requests these permissions when you first access printer settings.
+</Info>
+
+## Step 1: Pair Your Printer with Android
+
+Before the app can connect to your printer, you must pair it through your phone's Bluetooth settings.
+
+<Steps>
+  <Step title="Turn on Printer">
+    Power on your Bluetooth thermal printer. Most printers indicate readiness with a blinking blue LED.
+  </Step>
+  
+  <Step title="Open Android Bluetooth Settings">
+    From the app's Settings page:
+    - Tap on **Print Device** under the Hardware section
+    - Tap the **Settings gear icon** in the printer row
+    - This opens your phone's Bluetooth settings directly
+    
+    Alternatively, you can manually go to **Android Settings > Connected devices > Bluetooth**
+  </Step>
+  
+  <Step title="Find Your Printer">
+    In Bluetooth settings, look for your printer in the "Available devices" list.
+    
+    Common printer names:
+    - `BlueTooth Printer`
+    - `POS-5805` or `POS-8005`
+    - `RPP02N` or `RPP300`
+    - `MTP-II` or `MTP-III`
+    
+    <Tip>
+      Check your printer's manual or label for its exact Bluetooth name.
+    </Tip>
+  </Step>
+  
+  <Step title="Pair the Device">
+    Tap on your printer's name in the available devices list.
+    
+    - You may be prompted for a PIN code
+    - Common default PINs: `0000`, `1234`, or `1111`
+    - Check your printer manual if these don't work
+    
+    Once paired, the printer appears under "Paired devices."
+  </Step>
+</Steps>
+
+## Step 2: Connect Printer in the App
+
+After pairing your printer with Android, connect it within the app.
+
+<Steps>
+  <Step title="Open Settings">
+    From the home screen, tap the **Settings** icon in the top-right corner.
+  </Step>
+  
+  <Step title="View Print Device">
+    Under the **Hardware** section, you'll see **Print Device**.
+    
+    The subtitle shows the connection status:
+    - `No printer connected` - No active connection
+    - `[Printer Name]` - Connected printer name
+    - `CONNECTED` badge appears when active
+  </Step>
+  
+  <Step title="Tap Refresh">
+    Tap the **Refresh icon** (circular arrow) to scan for paired printers.
+    
+    <Note>
+      The refresh button shows a loading spinner while scanning. This typically takes 2-3 seconds.
+    </Note>
+  </Step>
+  
+  <Step title="Automatic Connection">
+    The app automatically:
+    1. Scans for all Bluetooth-paired devices
+    2. Filters for printers (devices with "print" or "POS" in the name)
+    3. Attempts to connect to the first compatible printer found
+    4. Saves the connection for future use
+    
+    <Info>
+      Once connected, the app remembers your printer and auto-connects on startup and during printing.
+    </Info>
+  </Step>
+  
+  <Step title="Connection Success">
+    When successfully connected, you'll see:
+    - A green snackbar message: "Connected to printer"
+    - The printer name displayed under Print Device
+    - A green `CONNECTED` badge next to the name
+  </Step>
+</Steps>
+
+## Understanding the Printer Status
+
+The Print Device row in Settings shows real-time connection status:
+
+### Status Indicators
+
+<CodeGroup>
+```text No Printer
+Print Device
+No printer connected
+```
+
+```text Connected
+Print Device
+Bluetooth Printer    [CONNECTED]
+```
+
+```text Scanning
+Print Device
+[Loading spinner shown]
+```
+</CodeGroup>
+
+### Action Buttons
+
+- **Refresh Icon**: Scan for paired printers and attempt connection
+- **Settings Gear**: Opens Android Bluetooth settings for pairing new devices
+
+## How Auto-Connection Works
+
+The app uses intelligent auto-connection to ensure your printer is always ready:
+
+<Steps>
+  <Step title="App Startup">
+    When you open the app, it checks for a saved printer MAC address.
+    
+    If found, it attempts to connect automatically in the background.
+  </Step>
+  
+  <Step title="During Printing">
+    When you tap "Print Receipt" on the checkout page:
+    
+    1. The app checks if the printer is connected
+    2. If not connected, it tries to auto-connect using saved settings
+    3. If auto-connect succeeds, printing proceeds
+    4. If auto-connect fails, you see an error message
+  </Step>
+  
+  <Step title="Connection Persistence">
+    The printer's MAC address is stored locally, so you only need to connect once. The app will remember and reconnect automatically.
+  </Step>
+</Steps>
+
+## Receipt Format and ESC/POS Commands
+
+The app uses ESC/POS commands to format receipts on thermal printers.
+
+### Receipt Layout
+
+A printed receipt includes:
+
+1. **Shop Name** - Centered, bold, large font
+2. **Address Lines** - Centered, normal font (if configured)
+3. **Phone Number** - Centered, normal font
+4. **Date/Time** - Format: `DD-MM-YYYY HH:MM AM/PM`
+5. **Separator Line** - Dashed line
+6. **Column Headers** - "Item", "Price", "Total"
+7. **Line Items** - Each product with quantity, price, and total
+8. **Total Line** - Right-aligned, bold
+9. **Footer Text** - Centered (customizable in Shop Details)
+10. **Paper Feed** - Extra lines for easy tearing
+
+### Example Receipt
+
+```
+         ELITE GROCERIES
+      123 Market Street
+       City, State 12345
+       Phone: 9876543210
+      14-03-2026 02:30 PM
+--------------------------------
+Item            Price   Total
+--------------------------------
+2x Basmati Rice 299.00  598.00
+1x Cooking Oil  450.00  450.00
+--------------------------------
+                TOTAL: 1048.00
+
+   Thank you for shopping!
+         Visit again!
+
+
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Printer won't pair in Android settings">
+    **Solutions:**
+    - Ensure printer is in pairing mode (check manual for button combination)
+    - Try restarting both printer and phone
+    - Move printer closer to your phone (within 1 meter)
+    - Make sure printer isn't already paired with another device
+    - Try unpairing and re-pairing if previously connected
+  </Accordion>
+  
+  <Accordion title="App can't find printer after pairing">
+    **Solutions:**
+    - Tap the Refresh button in the app to re-scan
+    - Verify the printer is powered on and in range
+    - Check that Bluetooth is enabled on your phone
+    - Grant all requested permissions (Bluetooth, Location)
+    - Try restarting the app
+  </Accordion>
+  
+  <Accordion title="Connection drops frequently">
+    **Solutions:**
+    - Keep printer within 5-10 meters of phone
+    - Ensure printer has sufficient battery/power
+    - Avoid interference from other Bluetooth devices
+    - Update your phone's Android version if outdated
+    - Try re-pairing the printer
+  </Accordion>
+  
+  <Accordion title="Print failed error when printing">
+    **Possible causes:**
+    - Printer is out of paper
+    - Printer battery is too low
+    - Bluetooth connection was interrupted
+    - Printer is offline or turned off
+    
+    **Solutions:**
+    - Check printer paper and reload if empty
+    - Charge or plug in printer
+    - Tap Refresh in Settings to reconnect
+    - Power cycle the printer
+  </Accordion>
+  
+  <Accordion title="Receipt prints garbled text or symbols">
+    **Causes:**
+    - Incompatible printer model
+    - Incorrect character encoding
+    
+    **Solutions:**
+    - Verify your printer supports ESC/POS commands
+    - Test with a different thermal printer if possible
+    - Check printer manual for supported command sets
+  </Accordion>
+  
+  <Accordion title="Receipt prints blank">
+    **Common issues:**
+    - Thermal paper loaded backwards (thermal side facing wrong way)
+    - Expired thermal paper (no longer heat-sensitive)
+    - Printer temperature too low
+    
+    **Solutions:**
+    - Flip the paper roll and reload
+    - Test with fresh thermal paper
+    - Check printer settings/temperature
+  </Accordion>
+</AccordionGroup>
+
+## Printer Compatibility
+
+The app works with most ESC/POS-compatible Bluetooth thermal printers:
+
+### Tested Models
+
+<Check>58mm portable thermal printers (POS-5805, RPP02N)</Check>
+<Check>80mm desktop thermal printers (POS-8005, MTP-III)</Check>
+<Check>Mobile thermal printers with Bluetooth 4.0+</Check>
+
+### Requirements
+
+<Warning>
+  Your printer must support:
+  - Bluetooth connectivity (BT 2.0 or higher)
+  - ESC/POS command set
+  - Thermal printing (not inkjet or laser)
+</Warning>
+
+## Tips for Best Results
+
+<CardGroup cols={2}>
+  <Card title="Keep Printer Charged" icon="charging-station">
+    Charge your printer regularly. Low battery can cause connection drops and print failures.
+  </Card>
+  <Card title="Use Quality Paper" icon="scroll">
+    Use fresh thermal paper for clear, long-lasting receipts. Old paper prints faded text.
+  </Card>
+  <Card title="Test Before Business Hours" icon="flask">
+    Print a test receipt before opening to ensure everything works properly.
+  </Card>
+  <Card title="Stay in Range" icon="signal">
+    Keep your phone within 5-10 meters of the printer during checkout.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<Card title="Checkout Process" icon="cart-shopping" href="/guides/checkout-process">
+  Learn how to complete transactions and print receipts during checkout
+</Card>

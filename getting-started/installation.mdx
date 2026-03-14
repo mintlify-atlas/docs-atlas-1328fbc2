@@ -1,0 +1,208 @@
+---
+title: Installation
+description: Install the Flutter Billing App and set up your development environment
+---
+
+## Prerequisites
+
+Before installing the Flutter Billing App, ensure you have the following prerequisites:
+
+<CardGroup cols={2}>
+  <Card title="Flutter SDK" icon="mobile">
+    Version `3.1.0` or higher required
+  </Card>
+  <Card title="Development IDE" icon="code">
+    Android Studio or Xcode for building and testing
+  </Card>
+  <Card title="Physical Device" icon="bluetooth" iconType="solid">
+    (Optional) Android/iOS device for hardware features
+  </Card>
+  <Card title="Bluetooth Printer" icon="print">
+    (Optional) Thermal printer for receipt printing
+  </Card>
+</CardGroup>
+
+<Note>
+  The app supports offline-first architecture and works without internet connectivity using local Hive database storage.
+</Note>
+
+## System Requirements
+
+- **Flutter SDK**: `>=3.1.0 <4.0.0`
+- **Platform**: Android or iOS
+- **Storage**: Local database powered by Hive
+- **Camera**: Required for barcode scanning functionality
+- **Bluetooth**: Required for thermal printer integration
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the repository and navigate to the project directory:
+
+    ```bash
+    git clone <repository_url>
+    cd billing_app
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    Fetch all required Flutter packages:
+
+    ```bash
+    flutter pub get
+    ```
+
+    This will install all dependencies from `pubspec.yaml` including:
+    - `flutter_bloc` for state management
+    - `hive` and `hive_flutter` for local database
+    - `mobile_scanner` for barcode scanning
+    - `print_bluetooth_thermal` for receipt printing
+    - `get_it` for dependency injection
+    - And more...
+  </Step>
+
+  <Step title="Run Code Generation">
+    Generate required code for Hive adapters and JSON serialization:
+
+    ```bash
+    dart run build_runner build --delete-conflicting-outputs
+    ```
+
+    <Warning>
+      This step is **required** before running the app. It generates:
+      - Hive type adapters for local database models
+      - JSON serialization code for data models
+    </Warning>
+  </Step>
+
+  <Step title="Run the Application">
+    Launch the app on your connected device or emulator:
+
+    ```bash
+    flutter run
+    ```
+
+    Or for a specific device:
+
+    ```bash
+    flutter run -d <device_id>
+    ```
+  </Step>
+</Steps>
+
+## Key Dependencies
+
+The app uses a robust tech stack with the following core dependencies:
+
+### State Management & Architecture
+
+```yaml pubspec.yaml
+# State Management & DI
+flutter_bloc: ^8.1.5
+get_it: ^7.6.7
+equatable: ^2.0.5
+
+# Functional Programming
+fpdart: ^1.1.0
+```
+
+### Database & Storage
+
+```yaml pubspec.yaml
+# Database
+hive: ^2.2.3
+hive_flutter: ^1.1.0
+```
+
+### Hardware Integrations
+
+```yaml pubspec.yaml
+# Scanner & Printer
+mobile_scanner: ^5.1.0
+print_bluetooth_thermal: ^1.1.2
+pretty_qr_code: ^3.3.0
+```
+
+### Navigation & UI
+
+```yaml pubspec.yaml
+# Navigation
+go_router: ^14.0.0
+
+# UI & Utilities
+google_fonts: ^6.1.0
+intl: ^0.19.0
+permission_handler: ^11.3.1
+```
+
+## Verify Installation
+
+After installation, verify everything is working:
+
+<Steps>
+  <Step title="Check Flutter Doctor">
+    ```bash
+    flutter doctor
+    ```
+    Ensure all checks pass for your target platform.
+  </Step>
+
+  <Step title="List Available Devices">
+    ```bash
+    flutter devices
+    ```
+    Verify your device or emulator is detected.
+  </Step>
+
+  <Step title="Run in Debug Mode">
+    ```bash
+    flutter run --debug
+    ```
+    The app should launch successfully with the barcode scanner interface.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build Runner Conflicts">
+    If you encounter conflicts during code generation:
+
+    ```bash
+    # Clean generated files and rebuild
+    flutter clean
+    flutter pub get
+    dart run build_runner clean
+    dart run build_runner build --delete-conflicting-outputs
+    ```
+  </Accordion>
+
+  <Accordion title="Camera Permissions">
+    For Android, ensure `AndroidManifest.xml` includes:
+    ```xml
+    <uses-permission android:name="android.permission.CAMERA" />
+    ```
+
+    For iOS, ensure `Info.plist` includes:
+    ```xml
+    <key>NSCameraUsageDescription</key>
+    <string>Camera access is required for barcode scanning</string>
+    ```
+  </Accordion>
+
+  <Accordion title="Bluetooth Permissions">
+    For Bluetooth printer functionality, ensure proper permissions are configured for your target platform.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/getting-started/quickstart">
+    Complete your first checkout flow
+  </Card>
+  <Card title="Configuration" icon="gear" href="/getting-started/configuration">
+    Configure shop settings and printer
+  </Card>
+</CardGroup>

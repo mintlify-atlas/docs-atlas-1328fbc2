@@ -1,0 +1,703 @@
+---
+title: System Architecture
+description: Technical architecture and design patterns of the Flutter Billing App
+---
+
+The Flutter Billing App is built using **Clean Architecture** principles with a **Feature-First** organizational structure. This ensures scalability, maintainability, and clear separation of concerns across all modules.
+
+## Architectural Overview
+
+The application follows a layered architecture pattern where each layer has specific responsibilities and dependencies flow inward toward the domain layer.
+
+<CardGroup cols={3}>
+  <Card title="Presentation Layer" icon="desktop">
+    UI components, BLoC state management, and user interaction handling
+  </Card>
+  <Card title="Domain Layer" icon="diagram-project">
+    Business logic, entities, use cases, and repository contracts
+  </Card>
+  <Card title="Data Layer" icon="database">
+    Data sources, repository implementations, and models
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+The app leverages modern Flutter packages and architectural patterns:
+
+### Core Dependencies
+
+```yaml pubspec.yaml
+dependencies:
+  # State Management & DI
+  flutter_bloc: ^8.1.5
+  get_it: ^7.6.7
+  equatable: ^2.0.5
+  
+  # Functional Programming
+  fpdart: ^1.1.0
+  
+  # Navigation
+  go_router: ^14.0.0
+  
+  # Database
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # UI & Utilities
+  google_fonts: ^6.1.0
+  vibration: ^3.1.8
+  intl: ^0.19.0
+  permission_handler: ^11.3.1
+  
+  # Scanner & Printer
+  pretty_qr_code: ^3.3.0
+  print_bluetooth_thermal: ^1.1.2
+  mobile_scanner: ^5.1.0
+```
+
+### Key Architectural Choices
+
+<AccordionGroup>
+  <Accordion title="State Management: flutter_bloc">
+    Uses the BLoC (Business Logic Component) pattern for predictable state management. All business logic is isolated in BLoCs, making the codebase testable and maintainable.
+    
+    - Immutable states using `equatable`
+    - Event-driven architecture
+    - Clear separation from UI
+  </Accordion>
+  
+  <Accordion title="Dependency Injection: get_it">
+    Service locator pattern for managing dependencies throughout the app. All repositories, use cases, and BLoCs are registered in a central service locator.
+    
+    ```dart
+    final sl = GetIt.instance;
+    
+    sl.registerFactory(() => ProductBloc(
+      getProductsUseCase: sl(),
+      addProductUseCase: sl(),
+    ));
+    ```
+  </Accordion>
+  
+  <Accordion title="Functional Error Handling: fpdart">
+    Uses `Either<Failure, Success>` pattern instead of throwing exceptions. All use cases return `Either` types for explicit error handling.
+    
+    ```dart
+    Future<Either<Failure, List<Product>>> getProducts();
+    ```
+  </Accordion>
+  
+  <Accordion title="Offline-First: Hive">
+    Lightning-fast NoSQL database that stores data locally. No network dependency required for core operations.
+    
+    - Type-safe with code generation
+    - Fast read/write operations
+    - Minimal setup overhead
+  </Accordion>
+</AccordionGroup>
+
+## Project Structure
+
+The codebase follows a **Feature-First Clean Architecture** structure:
+
+```
+lib/
+├── core/                       # Shared utilities and infrastructure
+│   ├── data/                   # Global data sources (Hive)
+│   ├── error/                  # Failure & exception models
+│   ├── theme/                  # UI styling and theming
+│   ├── usecase/                # Base UseCase contracts
+│   ├── utils/                  # Helper utilities
+│   ├── widgets/                # Reusable UI components
+│   └── service_locator.dart    # Dependency injection setup
+│
+├── features/                   # Feature modules
+│   ├── billing/                # POS & checkout operations
+│   │   ├── domain/
+│   │   │   └── entities/       # CartItem entity
+│   │   └── presentation/
+│   │       ├── bloc/           # BillingBloc
+│   │       └── pages/          # HomePage, ScannerPage, CheckoutPage
+│   │
+│   ├── product/                # Inventory management
+│   │   ├── data/
+│   │   │   ├── models/         # ProductModel with Hive adapter
+│   │   │   └── repositories/   # ProductRepositoryImpl
+│   │   ├── domain/
+│   │   │   ├── entities/       # Product entity
+│   │   │   ├── repositories/   # ProductRepository interface
+│   │   │   └── usecases/       # CRUD use cases
+│   │   └── presentation/
+│   │       ├── bloc/           # ProductBloc
+│   │       └── pages/          # Product list, add, edit pages
+│   │
+│   ├── settings/               # Printer configuration
+│   │   ├── data/
+│   │   │   └── repositories/   # PrinterRepositoryImpl
+│   │   ├── domain/
+│   │   │   └── repositories/   # PrinterRepository interface
+│   │   └── presentation/
+│   │       ├── bloc/           # PrinterBloc
+│   │       └── pages/          # SettingsPage
+│   │
+│   └── shop/                   # Shop details configuration
+│       ├── data/
+│       │   ├── models/         # ShopModel with Hive adapter
+│       │   └── repositories/   # ShopRepositoryImpl
+│       ├── domain/
+│       │   ├── entities/       # Shop entity
+│       │   ├── repositories/   # ShopRepository interface
+│       │   └── usecases/       # GetShop, UpdateShop
+│       └── presentation/
+│           ├── bloc/           # ShopBloc
+│           └── pages/          # ShopDetailsPage
+│
+└── config/
+    └── routes/
+        └── app_routes.dart     # GoRouter configuration
+```
+
+<Note>
+Each feature module is self-contained with its own domain, data, and presentation layers. This structure supports independent development and testing of features.
+</Note>
+
+## Clean Architecture Layers
+
+### Domain Layer (Business Logic)
+
+The domain layer contains the core business logic and is completely independent of external frameworks.
+
+#### Entities
+
+Pure Dart classes representing business objects:
+
+```dart lib/features/product/domain/entities/product.dart
+class Product extends Equatable {
+  final String id;
+  final String name;
+  final String barcode;
+  final double price;
+  final int stock;
+
+  const Product({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.price,
+    this.stock = 0,
+  });
+
+  @override
+  List<Object?> get props => [id, name, barcode, price, stock];
+}
+```
+
+#### Use Cases
+
+Encapsulate single business operations. Each use case implements the `UseCase` interface:
+
+```dart lib/core/usecase/usecase.dart
+abstract class UseCase<Type, Params> {
+  Future<Either<Failure, Type>> call(Params params);
+}
+
+class NoParams extends Equatable {
+  @override
+  List<Object> get props => [];
+}
+```
+
+Example use case implementation:
+
+```dart lib/features/product/domain/usecases/product_usecases.dart
+class GetProductsUseCase implements UseCase<List<Product>, NoParams> {
+  final ProductRepository repository;
+
+  GetProductsUseCase(this.repository);
+
+  @override
+  Future<Either<Failure, List<Product>>> call(NoParams params) {
+    return repository.getProducts();
+  }
+}
+```
+
+#### Repository Interfaces
+
+Abstract contracts defining data operations:
+
+```dart lib/features/product/domain/repositories/product_repository.dart
+abstract class ProductRepository {
+  Future<Either<Failure, List<Product>>> getProducts();
+  Future<Either<Failure, void>> addProduct(Product product);
+  Future<Either<Failure, void>> updateProduct(Product product);
+  Future<Either<Failure, void>> deleteProduct(String id);
+  Future<Either<Failure, Product>> getProductByBarcode(String barcode);
+}
+```
+
+### Data Layer (Data Sources & Repositories)
+
+The data layer implements repository interfaces and manages data persistence.
+
+#### Models
+
+Data transfer objects with serialization support:
+
+```dart lib/features/product/data/models/product_model.dart
+@HiveType(typeId: 0)
+class ProductModel extends Product {
+  @HiveField(0)
+  final String id;
+  
+  @HiveField(1)
+  final String name;
+  
+  @HiveField(2)
+  final String barcode;
+  
+  @HiveField(3)
+  final double price;
+  
+  @HiveField(4)
+  final int stock;
+
+  const ProductModel({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.price,
+    this.stock = 0,
+  }) : super(
+    id: id,
+    name: name,
+    barcode: barcode,
+    price: price,
+    stock: stock,
+  );
+}
+```
+
+#### Repository Implementation
+
+Concrete implementations using Hive for data persistence:
+
+```dart lib/features/product/data/repositories/product_repository_impl.dart
+class ProductRepositoryImpl implements ProductRepository {
+  @override
+  Future<Either<Failure, List<Product>>> getProducts() async {
+    try {
+      final box = HiveDatabase.productBox;
+      final products = box.values.toList();
+      return Right(products);
+    } catch (e) {
+      return Left(DatabaseFailure('Failed to load products'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> addProduct(Product product) async {
+    try {
+      final box = HiveDatabase.productBox;
+      final model = ProductModel(
+        id: product.id,
+        name: product.name,
+        barcode: product.barcode,
+        price: product.price,
+        stock: product.stock,
+      );
+      await box.put(product.id, model);
+      return const Right(null);
+    } catch (e) {
+      return Left(DatabaseFailure('Failed to add product'));
+    }
+  }
+}
+```
+
+### Presentation Layer (UI & State Management)
+
+The presentation layer handles user interface and state management using BLoC.
+
+#### BLoC Pattern
+
+Each feature has a dedicated BLoC for managing state:
+
+```dart lib/features/product/presentation/bloc/product_bloc.dart
+class ProductBloc extends Bloc<ProductEvent, ProductState> {
+  final GetProductsUseCase getProductsUseCase;
+  final AddProductUseCase addProductUseCase;
+  final UpdateProductUseCase updateProductUseCase;
+  final DeleteProductUseCase deleteProductUseCase;
+
+  ProductBloc({
+    required this.getProductsUseCase,
+    required this.addProductUseCase,
+    required this.updateProductUseCase,
+    required this.deleteProductUseCase,
+  }) : super(const ProductState()) {
+    on<LoadProducts>(_onLoadProducts);
+    on<AddProduct>(_onAddProduct);
+    on<UpdateProduct>(_onUpdateProduct);
+    on<DeleteProduct>(_onDeleteProduct);
+  }
+
+  Future<void> _onLoadProducts(
+      LoadProducts event, Emitter<ProductState> emit) async {
+    emit(state.copyWith(status: ProductStatus.loading));
+    final result = await getProductsUseCase(NoParams());
+    result.fold(
+      (failure) => emit(state.copyWith(
+        status: ProductStatus.error, 
+        message: failure.message
+      )),
+      (products) => emit(state.copyWith(
+        status: ProductStatus.loaded, 
+        products: products
+      )),
+    );
+  }
+}
+```
+
+#### State Objects
+
+Immutable state classes using Equatable:
+
+```dart
+enum ProductStatus { initial, loading, loaded, success, error }
+
+class ProductState extends Equatable {
+  final ProductStatus status;
+  final List<Product> products;
+  final String? message;
+
+  const ProductState({
+    this.status = ProductStatus.initial,
+    this.products = const [],
+    this.message,
+  });
+
+  ProductState copyWith({
+    ProductStatus? status,
+    List<Product>? products,
+    String? message,
+  }) {
+    return ProductState(
+      status: status ?? this.status,
+      products: products ?? this.products,
+      message: message ?? this.message,
+    );
+  }
+
+  @override
+  List<Object?> get props => [status, products, message];
+}
+```
+
+## Dependency Injection
+
+All dependencies are registered in the service locator at app startup:
+
+```dart lib/core/service_locator.dart
+import 'package:get_it/get_it.dart';
+
+final sl = GetIt.instance;
+
+Future<void> init() async {
+  // BLoCs - Registered as factories (new instance per request)
+  sl.registerFactory(
+    () => ProductBloc(
+      getProductsUseCase: sl(),
+      addProductUseCase: sl(),
+      updateProductUseCase: sl(),
+      deleteProductUseCase: sl(),
+    ),
+  );
+
+  sl.registerFactory(
+    () => ShopBloc(
+      getShopUseCase: sl(),
+      updateShopUseCase: sl(),
+    ),
+  );
+
+  // Use cases - Registered as lazy singletons
+  sl.registerLazySingleton(() => GetProductsUseCase(sl()));
+  sl.registerLazySingleton(() => AddProductUseCase(sl()));
+  sl.registerLazySingleton(() => UpdateProductUseCase(sl()));
+  sl.registerLazySingleton(() => DeleteProductUseCase(sl()));
+  sl.registerLazySingleton(() => GetProductByBarcodeUseCase(sl()));
+
+  // Repositories - Registered as lazy singletons
+  sl.registerLazySingleton<ProductRepository>(
+    () => ProductRepositoryImpl(),
+  );
+
+  sl.registerLazySingleton<ShopRepository>(
+    () => ShopRepositoryImpl(),
+  );
+}
+```
+
+<Warning>
+BLoCs are registered as factories to ensure each widget gets a fresh instance, while use cases and repositories are singletons to share state across the app.
+</Warning>
+
+## Application Initialization
+
+The app initializes core systems before running:
+
+```dart lib/main.dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Hive database
+  await HiveDatabase.init();
+  
+  // Register dependencies
+  await di.init();
+  
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ProductBloc>(
+          create: (context) => di.sl<ProductBloc>()..add(LoadProducts())
+        ),
+        BlocProvider<ShopBloc>(
+          create: (context) => di.sl<ShopBloc>()..add(LoadShopEvent())
+        ),
+        BlocProvider<BillingBloc>(
+          create: (context) => BillingBloc(
+            getProductByBarcodeUseCase: di.sl()
+          )
+        ),
+        BlocProvider<PrinterBloc>(
+          create: (context) => di.sl<PrinterBloc>()..add(InitPrinterEvent())
+        ),
+      ],
+      child: MaterialApp.router(
+        title: 'Billing App',
+        theme: AppTheme.lightTheme,
+        routerConfig: router,
+      ),
+    );
+  }
+}
+```
+
+<Steps>
+  <Step title="Initialize Flutter Bindings">
+    Ensures Flutter framework is ready before async operations
+  </Step>
+  
+  <Step title="Initialize Hive Database">
+    Registers adapters and opens all boxes for immediate access
+  </Step>
+  
+  <Step title="Register Dependencies">
+    Configures the service locator with all repositories, use cases, and BLoCs
+  </Step>
+  
+  <Step title="Provide BLoCs">
+    Wraps the app with MultiBlocProvider for global BLoC access
+  </Step>
+</Steps>
+
+## Error Handling Strategy
+
+The app uses functional error handling with `fpdart`'s `Either` type:
+
+```dart lib/core/error/failure.dart
+abstract class Failure extends Equatable {
+  final String message;
+  
+  const Failure(this.message);
+  
+  @override
+  List<Object> get props => [message];
+}
+
+class DatabaseFailure extends Failure {
+  const DatabaseFailure(String message) : super(message);
+}
+
+class NotFoundFailure extends Failure {
+  const NotFoundFailure(String message) : super(message);
+}
+```
+
+### Handling Results in BLoC
+
+Use cases return `Either<Failure, Success>` which BLoCs handle explicitly:
+
+```dart
+final result = await getProductsUseCase(NoParams());
+result.fold(
+  (failure) => emit(state.copyWith(
+    status: ProductStatus.error,
+    message: failure.message,
+  )),
+  (products) => emit(state.copyWith(
+    status: ProductStatus.loaded,
+    products: products,
+  )),
+);
+```
+
+<Note>
+This approach makes error handling explicit and prevents uncaught exceptions from crashing the app.
+</Note>
+
+## Routing Architecture
+
+The app uses `go_router` for declarative, type-safe navigation:
+
+```dart lib/config/routes/app_routes.dart
+final router = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomePage(),
+      routes: [
+        GoRoute(
+          path: 'scanner',
+          builder: (context, state) => const ScannerPage(),
+        ),
+        GoRoute(
+          path: 'checkout',
+          builder: (context, state) => const CheckoutPage(),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/products',
+      builder: (context, state) => const ProductListPage(),
+      routes: [
+        GoRoute(
+          path: 'add',
+          builder: (context, state) => const AddProductPage(),
+        ),
+        GoRoute(
+          path: 'edit/:id',
+          builder: (context, state) {
+            final product = state.extra as Product?;
+            if (product == null) {
+              return const ProductListPage();
+            }
+            return EditProductPage(product: product);
+          },
+        ),
+      ],
+    ),
+  ],
+);
+```
+
+### Navigation Patterns
+
+- **Nested Routes**: Child routes like `/scanner` under `/`
+- **Route Parameters**: Dynamic segments like `:id` in edit routes
+- **Extra Data**: Pass objects via `state.extra` for complex data
+- **Deep Linking**: Full URL support for direct navigation
+
+## Hardware Integration
+
+### Barcode Scanner
+
+Integrates with device camera using `mobile_scanner`:
+
+```dart
+final MobileScannerController controller = MobileScannerController(
+  detectionSpeed: DetectionSpeed.noDuplicates,
+  returnImage: false,
+);
+
+void _onDetect(BarcodeCapture capture) async {
+  final List<Barcode> barcodes = capture.barcodes;
+  
+  for (final barcode in barcodes) {
+    if (barcode.rawValue != null) {
+      // Process barcode
+      context.pop(barcode.rawValue);
+      break;
+    }
+  }
+}
+```
+
+### Bluetooth Printer
+
+Manages thermal printer connections and ESC/POS commands:
+
+```dart
+class PrinterHelper {
+  static final PrinterHelper _instance = PrinterHelper._internal();
+  factory PrinterHelper() => _instance;
+  
+  Future<bool> connect(String macAddress) async {
+    final bool result = await PrintBluetoothThermal.connect(
+      macPrinterAddress: macAddress
+    );
+    _isConnected = result;
+    return result;
+  }
+  
+  Future<void> printReceipt({...}) async {
+    List<int> bytes = [];
+    bytes += EscPos.init;
+    bytes += EscPos.alignCenter;
+    bytes += EscPos.textLarge;
+    bytes += _textToBytes(shopName);
+    // ... construct receipt
+    await PrintBluetoothThermal.writeBytes(bytes);
+  }
+}
+```
+
+## Testing Strategy
+
+The clean architecture design enables comprehensive testing:
+
+### Unit Tests
+- Test use cases in isolation with mocked repositories
+- Test BLoC event handlers with predictable state transitions
+- Test entities and models for data integrity
+
+### Widget Tests
+- Test individual pages with mocked BLoCs
+- Verify UI responds correctly to state changes
+- Test navigation flows
+
+### Integration Tests
+- Test complete user flows from scanning to printing
+- Verify database persistence
+- Test printer integration
+
+<Note>
+All business logic is testable without needing a running Flutter app, thanks to the separation of concerns in clean architecture.
+</Note>
+
+## Performance Optimizations
+
+### Hive Database
+- **Fast reads**: In-memory caching for frequently accessed data
+- **Lazy loading**: Boxes opened on-demand
+- **Compact storage**: Binary serialization reduces storage size
+
+### BLoC Optimization
+- **Factory pattern**: New instances prevent state leaks between screens
+- **Equatable**: Prevents unnecessary rebuilds by comparing state values
+- **Selective emissions**: Only emit when state actually changes
+
+### UI Performance
+- **Const constructors**: Reduce widget rebuilds
+- **ListView builders**: Lazy rendering for large product lists
+- **Cached fonts**: Google Fonts cached locally after first load

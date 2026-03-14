@@ -1,0 +1,401 @@
+---
+title: Error Handling
+description: Using fpdart's Either pattern for functional error handling in the Flutter Billing App
+---
+
+## Overview
+
+The Flutter Billing App uses **fpdart**'s `Either<L, R>` type for functional error handling. This approach provides type-safe error handling without exceptions, making errors explicit and impossible to ignore.
+
+## The Either Pattern
+
+`Either<L, R>` is a type that represents a value that can be one of two types:
+- **Left (L)**: Represents a failure or error
+- **Right (R)**: Represents a successful result
+
+```dart
+import 'package:fpdart/fpdart.dart';
+
+// Either<Failure, Success>
+Either<Failure, Product> result = await getProduct(id);
+```
+
+<Note>
+  By convention, `Left` contains errors and `Right` contains success values. Think of it as: "Right is right" (correct/successful).
+</Note>
+
+## Failure Classes
+
+### Base Failure Class
+
+```dart lib/core/error/failure.dart
+import 'package:equatable/equatable.dart';
+
+abstract class Failure extends Equatable {
+  final String message;
+  const Failure(this.message);
+
+  @override
+  List<Object> get props => [message];
+}
+```
+
+### Concrete Failure Types
+
+```dart
+class CacheFailure extends Failure {
+  const CacheFailure(String message) : super(message);
+}
+```
+
+You can create additional failure types for different error scenarios:
+
+```dart
+// Example of other possible failures
+class NetworkFailure extends Failure {
+  const NetworkFailure(String message) : super(message);
+}
+
+class ValidationFailure extends Failure {
+  const ValidationFailure(String message) : super(message);
+}
+
+class PermissionFailure extends Failure {
+  const PermissionFailure(String message) : super(message);
+}
+```
+
+## Repository Pattern with Either
+
+### Repository Interface
+
+```dart lib/features/product/domain/repositories/product_repository.dart
+import 'package:fpdart/fpdart.dart';
+import '../../../../core/error/failure.dart';
+import '../entities/product.dart';
+
+abstract class ProductRepository {
+  Future<Either<Failure, List<Product>>> getProducts();
+  Future<Either<Failure, Product>> getProductByBarcode(String barcode);
+  Future<Either<Failure, void>> addProduct(Product product);
+  Future<Either<Failure, void>> updateProduct(Product product);
+  Future<Either<Failure, void>> deleteProduct(String id);
+}
+```
+
+<Tip>
+  All repository methods return `Future<Either<Failure, T>>` instead of throwing exceptions. This makes error handling explicit in the type system.
+</Tip>
+
+### Repository Implementation
+
+```dart lib/features/product/data/repositories/product_repository_impl.dart
+import 'package:fpdart/fpdart.dart';
+import '../../../../core/data/hive_database.dart';
+import '../../../../core/error/failure.dart';
+import '../models/product_model.dart';
+
+class ProductRepositoryImpl implements ProductRepository {
+  @override
+  Future<Either<Failure, List<Product>>> getProducts() async {
+    try {
+      final box = HiveDatabase.productBox;
+      final products = box.values.toList();
+      return Right(products); // Success case
+    } catch (e) {
+      return Left(CacheFailure(e.toString())); // Error case
+    }
+  }
+
+  @override
+  Future<Either<Failure, Product>> getProductByBarcode(String barcode) async {
+    try {
+      final box = HiveDatabase.productBox;
+      final product = box.values.firstWhere(
+        (element) => element.barcode == barcode,
+        orElse: () => throw Exception('Product not found'),
+      );
+      return Right(product);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> addProduct(Product product) async {
+    try {
+      final box = HiveDatabase.productBox;
+      final model = ProductModel.fromEntity(product);
+      await box.put(model.id, model);
+      return const Right(null); // Success with no return value
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
+}
+```
+
+<Warning>
+  Always wrap Hive and other I/O operations in try-catch blocks, then return `Left(Failure)` or `Right(result)`.
+</Warning>
+
+## Handling Either in Business Logic
+
+### Pattern Matching with fold
+
+The most common way to handle `Either` is using the `fold` method:
+
+```dart
+final result = await productRepository.getProducts();
+
+result.fold(
+  (failure) {
+    // Handle error (Left side)
+    print('Error: ${failure.message}');
+    showErrorSnackBar(failure.message);
+  },
+  (products) {
+    // Handle success (Right side)
+    print('Got ${products.length} products');
+    displayProducts(products);
+  },
+);
+```
+
+### Using match
+
+```dart
+final message = result.match(
+  (failure) => 'Error: ${failure.message}',
+  (products) => 'Loaded ${products.length} products',
+);
+```
+
+### Checking Left or Right
+
+```dart
+if (result.isLeft()) {
+  // Handle error
+  final failure = result.getLeft().toNullable();
+  print(failure?.message);
+}
+
+if (result.isRight()) {
+  // Handle success
+  final products = result.getRight().toNullable();
+  print(products?.length);
+}
+```
+
+## Use Cases in the App
+
+### 1. Loading Products
+
+```dart
+// In BLoC or ViewModel
+final result = await productRepository.getProducts();
+
+result.fold(
+  (failure) => emit(ProductError(failure.message)),
+  (products) => emit(ProductLoaded(products)),
+);
+```
+
+### 2. Scanning Barcode
+
+```dart
+final result = await productRepository.getProductByBarcode(barcode);
+
+result.fold(
+  (failure) {
+    // Product not found
+    emit(state.copyWith(
+      error: 'Product not found for barcode: $barcode',
+    ));
+  },
+  (product) {
+    // Add product to cart
+    emit(state.copyWith(
+      cartItems: [...state.cartItems, CartItem(product: product, quantity: 1)],
+    ));
+  },
+);
+```
+
+### 3. Adding Product
+
+```dart
+final result = await productRepository.addProduct(newProduct);
+
+result.fold(
+  (failure) {
+    showSnackBar('Failed to add product: ${failure.message}');
+  },
+  (_) {
+    showSnackBar('Product added successfully');
+    context.pop();
+  },
+);
+```
+
+### 4. Deleting Product
+
+```dart
+final result = await productRepository.deleteProduct(productId);
+
+result.fold(
+  (failure) => showErrorDialog(failure.message),
+  (_) => emit(ProductDeleted(productId)),
+);
+```
+
+## Chaining Operations
+
+### Using flatMap (bind)
+
+Chain multiple operations that return `Either`:
+
+```dart
+final result = await productRepository
+    .getProductByBarcode(barcode)
+    .then((either) => either.flatMap((product) {
+      // Check stock before adding to cart
+      if (product.stock > 0) {
+        return Right(product);
+      } else {
+        return Left(CacheFailure('Product out of stock'));
+      }
+    }));
+```
+
+### Using map
+
+Transform the success value:
+
+```dart
+final result = await productRepository
+    .getProducts()
+    .then((either) => either.map((products) {
+      // Transform products list
+      return products.where((p) => p.stock > 0).toList();
+    }));
+```
+
+## BLoC Integration Example
+
+```dart
+class ProductBloc extends Bloc<ProductEvent, ProductState> {
+  final ProductRepository productRepository;
+
+  ProductBloc({required this.productRepository}) : super(ProductInitial()) {
+    on<LoadProducts>(_onLoadProducts);
+    on<AddProduct>(_onAddProduct);
+  }
+
+  Future<void> _onLoadProducts(
+    LoadProducts event,
+    Emitter<ProductState> emit,
+  ) async {
+    emit(ProductLoading());
+    
+    final result = await productRepository.getProducts();
+    
+    result.fold(
+      (failure) => emit(ProductError(failure.message)),
+      (products) => emit(ProductLoaded(products)),
+    );
+  }
+
+  Future<void> _onAddProduct(
+    AddProduct event,
+    Emitter<ProductState> emit,
+  ) async {
+    final result = await productRepository.addProduct(event.product);
+    
+    result.fold(
+      (failure) => emit(ProductError(failure.message)),
+      (_) => add(LoadProducts()), // Reload products after adding
+    );
+  }
+}
+```
+
+## Benefits of Either Pattern
+
+<CardGroup cols={2}>
+  <Card title="Type Safety" icon="shield-check">
+    Errors are encoded in the type system, making them impossible to ignore
+  </Card>
+  
+  <Card title="No Silent Failures" icon="bell">
+    You must explicitly handle both success and failure cases
+  </Card>
+  
+  <Card title="Composable" icon="link">
+    Chain operations with `map`, `flatMap`, and other functional methods
+  </Card>
+  
+  <Card title="Testable" icon="flask">
+    Easy to test both success and failure paths without exception handling
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Use fold or match">
+    Never call `.getLeft()` or `.getRight()` without checking first. Use `fold` or `match` to handle both cases.
+  </Accordion>
+  
+  <Accordion title="Create Specific Failure Types">
+    Instead of generic errors, create specific failure classes like `NetworkFailure`, `ValidationFailure`, etc.
+  </Accordion>
+  
+  <Accordion title="Keep Failure Messages User-Friendly">
+    Error messages should be clear and actionable for end users, not just developer-facing.
+  </Accordion>
+  
+  <Accordion title="Don't Throw Exceptions in Repositories">
+    Catch all exceptions and convert them to `Left(Failure)`. Let the Either type handle error flow.
+  </Accordion>
+</AccordionGroup>
+
+## Common Anti-Patterns to Avoid
+
+```dart
+// ❌ BAD: Calling getRight without checking
+final products = result.getRight().toNullable()!; // Can crash!
+
+// ✅ GOOD: Use fold to handle both cases
+result.fold(
+  (failure) => handleError(failure),
+  (products) => handleSuccess(products),
+);
+
+// ❌ BAD: Throwing exceptions in repository
+Future<Either<Failure, Product>> getProduct(String id) async {
+  throw Exception('Not found'); // Wrong!
+}
+
+// ✅ GOOD: Return Left for errors
+Future<Either<Failure, Product>> getProduct(String id) async {
+  try {
+    // ... fetch logic
+    return Right(product);
+  } catch (e) {
+    return Left(CacheFailure(e.toString()));
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="/development/database">
+    See how Either integrates with Hive database operations
+  </Card>
+  
+  <Card title="Clean Architecture" icon="sitemap" href="/development/clean-architecture">
+    Understand how Either flows through architecture layers
+  </Card>
+</CardGroup>

@@ -1,0 +1,523 @@
+---
+title: Hardware Integration
+description: Barcode scanner and Bluetooth thermal printer integration in the Flutter Billing App
+---
+
+## Overview
+
+The Flutter Billing App integrates with hardware devices for a complete point-of-sale experience:
+- **Barcode Scanner**: Real-time camera-based barcode scanning using `mobile_scanner`
+- **Thermal Printer**: Bluetooth receipt printing using `print_bluetooth_thermal`
+
+## Barcode Scanner Integration
+
+### Dependencies
+
+```yaml pubspec.yaml
+dependencies:
+  mobile_scanner: ^5.2.4
+  vibration: ^4.0.0  # For haptic feedback
+```
+
+### Scanner Setup
+
+```dart lib/features/billing/presentation/pages/home_page.dart
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:vibration/vibration.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final MobileScannerController _scannerController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.normal,
+    returnImage: false,  // Don't return images for performance
+  );
+
+  bool _isCameraOn = true;
+  bool _isFlashOn = false;
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
+  }
+}
+```
+
+<Note>
+  Set `returnImage: false` for better performance. Images are not needed for barcode scanning in this app.
+</Note>
+
+### Scanner Widget
+
+```dart
+Widget _buildScannerSection() {
+  return Container(
+    color: Colors.black,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        MobileScanner(
+          controller: _scannerController,
+          onDetect: _onDetect,
+        ),
+        if (!_isCameraOn) _buildCameraOffState(),
+        // Overlay UI elements...
+      ],
+    ),
+  );
+}
+```
+
+### Barcode Detection Handler
+
+```dart home_page.dart
+final Map<String, DateTime> _lastScanTimes = {};
+
+void _onDetect(BarcodeCapture capture) async {
+  final List<Barcode> barcodes = capture.barcodes;
+  final now = DateTime.now();
+
+  for (final barcode in barcodes) {
+    if (barcode.rawValue != null) {
+      final rawValue = barcode.rawValue!;
+
+      // Cooldown logic: 2 seconds per identical barcode
+      if (_lastScanTimes.containsKey(rawValue)) {
+        final lastScan = _lastScanTimes[rawValue]!;
+        if (now.difference(lastScan).inSeconds < 2) {
+          continue;  // Skip duplicate scan
+        }
+      }
+
+      _lastScanTimes[rawValue] = now;
+
+      // Vibrate on successful scan
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator == true) {
+        Vibration.vibrate();
+      }
+
+      // Process barcode
+      if (mounted) {
+        context.read<BillingBloc>().add(ScanBarcodeEvent(rawValue));
+      }
+      break;  // Process one barcode at a time
+    }
+  }
+}
+```
+
+<Warning>
+  Implement cooldown logic to prevent rapid duplicate scans. Without it, a single scan could trigger multiple events.
+</Warning>
+
+### Scanner Controls
+
+#### Toggle Flash
+
+```dart
+IconButton(
+  icon: Icon(_isFlashOn ? Icons.flashlight_off : Icons.flashlight_on),
+  onPressed: () {
+    setState(() => _isFlashOn = !_isFlashOn);
+    _scannerController.toggleTorch();
+  },
+)
+```
+
+#### Toggle Camera On/Off
+
+```dart
+IconButton(
+  icon: Icon(_isCameraOn ? Icons.videocam : Icons.videocam_off),
+  onPressed: () {
+    setState(() => _isCameraOn = !_isCameraOn);
+    if (_isCameraOn) {
+      _scannerController.start();
+    } else {
+      _scannerController.stop();
+    }
+  },
+)
+```
+
+#### Pause/Resume on Navigation
+
+```dart
+PrimaryButton(
+  onPressed: () async {
+    // Stop scanner before navigation
+    _scannerController.stop();
+    
+    await context.push('/checkout');
+    
+    // Resume scanner when returning
+    if (_isCameraOn && mounted) {
+      _scannerController.start();
+    }
+  },
+  label: 'Review Order',
+)
+```
+
+<Tip>
+  Always stop the camera scanner before navigating to other pages to save battery and prevent background resource usage.
+</Tip>
+
+### Scanner UI Overlay
+
+Create a visual scanning frame:
+
+```dart
+Center(
+  child: Container(
+    width: 250,
+    height: 250,
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.white24, width: 2),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Stack(
+      children: [
+        _buildCorner(Alignment.topLeft),
+        _buildCorner(Alignment.topRight),
+        _buildCorner(Alignment.bottomLeft),
+        _buildCorner(Alignment.bottomRight),
+      ],
+    ),
+  ),
+)
+```
+
+## Thermal Printer Integration
+
+### Dependencies
+
+```yaml pubspec.yaml
+dependencies:
+  print_bluetooth_thermal: ^1.1.2
+  permission_handler: ^11.3.1
+  intl: ^0.19.0  # For date formatting
+```
+
+### Printer Helper Class
+
+```dart lib/core/utils/printer_helper.dart
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+class PrinterHelper {
+  // Singleton pattern
+  static final PrinterHelper _instance = PrinterHelper._internal();
+  factory PrinterHelper() => _instance;
+  PrinterHelper._internal();
+
+  bool _isConnected = false;
+  bool get isConnected => _isConnected;
+}
+```
+
+### Permission Handling
+
+```dart printer_helper.dart
+Future<bool> checkPermission() async {
+  // Request Bluetooth and Location permissions
+  // Android 12+ needs BLUETOOTH_SCAN, BLUETOOTH_CONNECT
+  // Older Android needs BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_FINE_LOCATION
+
+  Map<Permission, PermissionStatus> statuses = await [
+    Permission.bluetooth,
+    Permission.bluetoothScan,
+    Permission.bluetoothConnect,
+    Permission.location,
+  ].request();
+
+  return statuses.values.every((status) => status.isGranted);
+}
+```
+
+<Warning>
+  Android 12+ requires `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT` permissions. Older versions need `BLUETOOTH`, `BLUETOOTH_ADMIN`, and `ACCESS_FINE_LOCATION`.
+</Warning>
+
+### Device Discovery
+
+```dart
+Future<List<BluetoothInfo>> getBondedDevices() async {
+  try {
+    final List<BluetoothInfo> list =
+        await PrintBluetoothThermal.pairedBluetooths;
+    return list;
+  } catch (e) {
+    return [];
+  }
+}
+```
+
+### Connect to Printer
+
+```dart
+Future<bool> connect(String macAddress) async {
+  try {
+    final bool result =
+        await PrintBluetoothThermal.connect(macPrinterAddress: macAddress);
+    _isConnected = result;
+    return result;
+  } catch (e) {
+    _isConnected = false;
+    return false;
+  }
+}
+```
+
+### Disconnect from Printer
+
+```dart
+Future<bool> disconnect() async {
+  try {
+    final bool result = await PrintBluetoothThermal.disconnect;
+    _isConnected = !result;
+    return result;
+  } catch (e) {
+    return false;
+  }
+}
+```
+
+### ESC/POS Commands
+
+```dart printer_helper.dart
+class EscPos {
+  static const List<int> init = [0x1B, 0x40];
+  static const List<int> alignCenter = [0x1B, 0x61, 0x01];
+  static const List<int> alignLeft = [0x1B, 0x61, 0x00];
+  static const List<int> alignRight = [0x1B, 0x61, 0x02];
+  static const List<int> boldOn = [0x1B, 0x45, 0x01];
+  static const List<int> boldOff = [0x1B, 0x45, 0x00];
+  static const List<int> textNormal = [0x1D, 0x21, 0x00];
+  static const List<int> textLarge = [0x1D, 0x21, 0x11];
+  static const List<int> lineFeed = [0x0A];
+}
+```
+
+<AccordionGroup>
+  <Accordion title="ESC/POS Command Reference">
+    - `init`: Initialize printer and clear buffer
+    - `alignCenter/Left/Right`: Set text alignment
+    - `boldOn/Off`: Enable/disable bold text
+    - `textNormal/Large`: Set text size
+    - `lineFeed`: Print new line (\n)
+  </Accordion>
+</AccordionGroup>
+
+### Receipt Printing
+
+```dart printer_helper.dart
+Future<void> printReceipt({
+  required String shopName,
+  required String address1,
+  required String address2,
+  required String phone,
+  required List<Map<String, dynamic>> items,
+  required double total,
+  required String footer,
+}) async {
+  if (!_isConnected) return;
+
+  List<int> bytes = [];
+
+  // Initialize printer
+  bytes += EscPos.init;
+
+  // Shop Name (Center, Bold, Large)
+  bytes += EscPos.alignCenter;
+  bytes += EscPos.boldOn;
+  bytes += EscPos.textLarge;
+  bytes += _textToBytes(shopName);
+  bytes += EscPos.lineFeed;
+
+  // Address & Phone (Normal, Center)
+  bytes += EscPos.textNormal;
+  bytes += EscPos.boldOff;
+  if (address1.isNotEmpty) {
+    bytes += _textToBytes(address1);
+    bytes += EscPos.lineFeed;
+  }
+  if (address2.isNotEmpty) {
+    bytes += _textToBytes(address2);
+    bytes += EscPos.lineFeed;
+  }
+  bytes += _textToBytes(phone);
+  bytes += EscPos.lineFeed;
+
+  // Date and Time
+  String formattedDate = DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.now());
+  bytes += _textToBytes(formattedDate);
+  bytes += EscPos.lineFeed;
+
+  bytes += _textToBytes('--------------------------------');
+  bytes += EscPos.lineFeed;
+
+  // Header (Align Left)
+  bytes += EscPos.alignLeft;
+  bytes += _textToBytes('Item            Price   Total');
+  bytes += EscPos.lineFeed;
+  bytes += _textToBytes('--------------------------------');
+  bytes += EscPos.lineFeed;
+
+  // Print items
+  for (var item in items) {
+    String name = item['name'].toString();
+    String qty = item['qty'].toString();
+    String price = item['price'].toString();
+    String totalItem = item['total'].toString();
+
+    String prefix = '${qty}x $name';
+    if (prefix.length > 16) prefix = prefix.substring(0, 16);
+
+    String line = prefix.padRight(16) + price.padRight(8) + totalItem;
+    bytes += _textToBytes(line);
+    bytes += EscPos.lineFeed;
+  }
+
+  bytes += _textToBytes('--------------------------------');
+  bytes += EscPos.lineFeed;
+
+  // Total (Align Right, Bold)
+  bytes += EscPos.alignRight;
+  bytes += EscPos.boldOn;
+  bytes += _textToBytes('TOTAL: $total');
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.boldOff;
+  bytes += EscPos.lineFeed;
+
+  // Footer (Center)
+  bytes += EscPos.alignCenter;
+  bytes += _textToBytes(footer);
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.lineFeed;
+  bytes += EscPos.lineFeed;
+
+  // Send to printer
+  await PrintBluetoothThermal.writeBytes(bytes);
+}
+
+List<int> _textToBytes(String text) {
+  // Latin-1 encoding for basic thermal printers
+  return List.from(text.codeUnits);
+}
+```
+
+### Usage Example
+
+```dart
+final printerHelper = PrinterHelper();
+
+// Check permissions
+final hasPermission = await printerHelper.checkPermission();
+if (!hasPermission) {
+  showSnackBar('Bluetooth permissions required');
+  return;
+}
+
+// Get paired devices
+final devices = await printerHelper.getBondedDevices();
+
+// Connect to printer
+final connected = await printerHelper.connect(devices.first.macAdress);
+
+if (connected) {
+  // Print receipt
+  await printerHelper.printReceipt(
+    shopName: 'My Shop',
+    address1: '123 Main Street',
+    address2: 'City, State',
+    phone: '+1234567890',
+    items: [
+      {'name': 'Product A', 'qty': 2, 'price': '10.00', 'total': '20.00'},
+      {'name': 'Product B', 'qty': 1, 'price': '15.00', 'total': '15.00'},
+    ],
+    total: 35.00,
+    footer: 'Thank you for your purchase!',
+  );
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Implement Scan Cooldown" icon="clock">
+    Prevent duplicate scans by implementing a 2-second cooldown per barcode
+  </Card>
+  
+  <Card title="Stop Scanner on Navigation" icon="pause">
+    Always pause the camera when navigating away to save battery
+  </Card>
+  
+  <Card title="Check Permissions Early" icon="shield-check">
+    Request Bluetooth permissions before attempting to connect to printer
+  </Card>
+  
+  <Card title="Handle Connection Failures" icon="plug-circle-xmark">
+    Always check connection status before printing and provide user feedback
+  </Card>
+</CardGroup>
+
+## Testing Hardware Integration
+
+### Barcode Scanner Testing
+
+1. Test with various barcode formats (EAN-13, UPC-A, QR codes)
+2. Test in different lighting conditions
+3. Verify cooldown logic prevents duplicate scans
+4. Test camera pause/resume on navigation
+
+### Printer Testing
+
+1. Test with different Bluetooth thermal printers
+2. Verify receipt formatting on actual printer
+3. Test permission handling on different Android versions
+4. Test connection recovery after Bluetooth disconnect
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Barcode Scanner Not Working">
+    - Check camera permissions in app settings
+    - Ensure good lighting conditions
+    - Verify barcode format is supported
+    - Try cleaning camera lens
+  </Accordion>
+  
+  <Accordion title="Printer Not Connecting">
+    - Verify Bluetooth is enabled
+    - Check if printer is paired in system settings
+    - Request all required Bluetooth permissions
+    - Ensure printer is within range and powered on
+  </Accordion>
+  
+  <Accordion title="Receipt Formatting Issues">
+    - Verify ESC/POS commands match printer model
+    - Check character encoding (use Latin-1 for most thermal printers)
+    - Adjust column widths based on printer's character width
+    - Test with printer's native resolution
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="shield-halved" href="/development/error-handling">
+    Handle hardware errors gracefully with Either pattern
+  </Card>
+  
+  <Card title="State Management" icon="diagram-project" href="/development/state-management">
+    Integrate hardware events with BLoC
+  </Card>
+</CardGroup>

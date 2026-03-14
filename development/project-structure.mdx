@@ -1,0 +1,381 @@
+---
+title: Project Structure
+description: File organization and folder structure of the Flutter Billing App
+---
+
+## Overview
+
+The Flutter Billing App uses a **Feature-First Clean Architecture** structure, where each feature is self-contained with its own domain, data, and presentation layers.
+
+<Info>
+This structure scales better than layer-first organization, as related code stays together and features can be developed independently.
+</Info>
+
+## Root Directory Structure
+
+```text
+lib/
+├── core/                       # Shared utilities and infrastructure
+├── features/                   # Feature modules
+├── config/                     # App configuration (routes, etc.)
+└── main.dart                   # Application entry point
+```
+
+## Core Directory
+
+The `core/` directory contains shared code used across multiple features:
+
+<Tabs>
+  <Tab title="Structure">
+    ```text
+    core/
+    ├── data/                   # Global data sources
+    │   └── hive_database.dart  # Hive initialization and box management
+    ├── error/                  # Error handling
+    │   └── failure.dart        # Base Failure classes
+    ├── theme/                  # UI theming
+    │   └── app_theme.dart      # Material theme configuration
+    ├── usecase/                # Base contracts
+    │   └── usecase.dart        # UseCase interface
+    ├── utils/                  # Helper utilities
+    │   └── printer_helper.dart # Bluetooth printer utilities
+    ├── widgets/                # Reusable UI components
+    └── service_locator.dart    # Dependency injection setup
+    ```
+  </Tab>
+  <Tab title="Purpose">
+    <AccordionGroup>
+      <Accordion title="core/data/">
+        Global data infrastructure shared across features, such as Hive database initialization and common data sources.
+      </Accordion>
+      <Accordion title="core/error/">
+        Standardized error handling with `Failure` base classes compatible with `fpdart`'s `Either` type.
+      </Accordion>
+      <Accordion title="core/theme/">
+        Application-wide UI styling, typography, and Material theme configuration.
+      </Accordion>
+      <Accordion title="core/usecase/">
+        Base `UseCase` interface that all domain use cases implement.
+      </Accordion>
+      <Accordion title="core/utils/">
+        Helper classes and utilities like printer management, formatters, and validators.
+      </Accordion>
+      <Accordion title="core/widgets/">
+        Reusable UI components used across multiple features (AppBars, buttons, cards).
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+</Tabs>
+
+## Features Directory
+
+Each feature is a self-contained module following Clean Architecture:
+
+```text
+features/
+├── billing/                    # POS checkout operations
+├── product/                    # Product inventory management
+├── shop/                       # Shop details configuration
+└── settings/                   # App settings and printer config
+```
+
+### Feature Module Structure
+
+Every feature follows the same three-layer pattern:
+
+<CodeGroup>
+```text Product Feature
+features/product/
+├── data/
+│   ├── models/
+│   │   ├── product_model.dart
+│   │   └── product_model.g.dart        # Generated Hive adapter
+│   └── repositories/
+│       └── product_repository_impl.dart
+├── domain/
+│   ├── entities/
+│   │   └── product.dart
+│   ├── repositories/
+│   │   └── product_repository.dart      # Abstract interface
+│   └── usecases/
+│       └── product_usecases.dart
+└── presentation/
+    ├── bloc/
+    │   ├── product_bloc.dart
+    │   ├── product_event.dart
+    │   └── product_state.dart
+    └── pages/
+        ├── product_list_page.dart
+        ├── add_product_page.dart
+        └── edit_product_page.dart
+```
+
+```text Billing Feature
+features/billing/
+├── domain/
+│   └── entities/
+│       └── cart_item.dart
+└── presentation/
+    ├── bloc/
+    │   ├── billing_bloc.dart
+    │   ├── billing_event.dart
+    │   └── billing_state.dart
+    └── pages/
+        ├── home_page.dart
+        ├── checkout_page.dart
+        └── scanner_page.dart
+```
+
+```text Shop Feature
+features/shop/
+├── data/
+│   ├── models/
+│   │   ├── shop_model.dart
+│   │   └── shop_model.g.dart
+│   └── repositories/
+│       └── shop_repository_impl.dart
+├── domain/
+│   ├── entities/
+│   │   └── shop.dart
+│   ├── repositories/
+│   │   └── shop_repository.dart
+│   └── usecases/
+│       └── shop_usecases.dart
+└── presentation/
+    ├── bloc/
+    │   ├── shop_bloc.dart
+    │   ├── shop_event.dart
+    │   └── shop_state.dart
+    └── pages/
+        └── shop_details_page.dart
+```
+</CodeGroup>
+
+## Layer Responsibilities
+
+<CardGroup cols={3}>
+  <Card title="Domain" icon="brain" color="#3b82f6">
+    **Pure Business Logic**
+    - Entities (business objects)
+    - Repository interfaces
+    - Use cases (operations)
+    - No external dependencies
+  </Card>
+  
+  <Card title="Data" icon="database" color="#10b981">
+    **Data Management**
+    - Repository implementations
+    - Data models with serialization
+    - Data source abstractions
+    - Hive/API integration
+  </Card>
+  
+  <Card title="Presentation" icon="window" color="#8b5cf6">
+    **UI & State**
+    - Flutter widgets/pages
+    - BLoC state management
+    - Events and states
+    - User interaction logic
+  </Card>
+</CardGroup>
+
+## Configuration Files
+
+### Routing Configuration
+
+```text
+config/
+└── routes/
+    └── app_routes.dart         # GoRouter configuration
+```
+
+Centralized navigation using `go_router` for type-safe routing.
+
+### Entry Point
+
+The `main.dart` file initializes the app:
+
+```dart lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'config/routes/app_routes.dart';
+import 'core/data/hive_database.dart';
+import 'core/service_locator.dart' as di;
+import 'core/theme/app_theme.dart';
+import 'features/billing/presentation/bloc/billing_bloc.dart';
+import 'features/product/presentation/bloc/product_bloc.dart';
+import 'features/shop/presentation/bloc/shop_bloc.dart';
+import 'features/settings/presentation/bloc/printer_bloc.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await HiveDatabase.init();      // Initialize local database
+  await di.init();                 // Setup dependency injection
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ProductBloc>(
+          create: (context) => di.sl<ProductBloc>()..add(LoadProducts())),
+        BlocProvider<ShopBloc>(
+          create: (context) => di.sl<ShopBloc>()..add(LoadShopEvent())),
+        BlocProvider<BillingBloc>(
+          create: (context) => BillingBloc(getProductByBarcodeUseCase: di.sl())),
+        BlocProvider<PrinterBloc>(
+          create: (context) => di.sl<PrinterBloc>()..add(InitPrinterEvent())),
+      ],
+      child: MaterialApp.router(
+        title: 'Billing App',
+        theme: AppTheme.lightTheme,
+        routerConfig: router,
+        debugShowCheckedModeBanner: false,
+      ),
+    );
+  }
+}
+```
+
+<Steps>
+  <Step title="Initialize Flutter Bindings">
+    Required for async operations before runApp()
+  </Step>
+  <Step title="Initialize Hive Database">
+    Opens Hive boxes for products, shop settings, etc.
+  </Step>
+  <Step title="Setup Dependency Injection">
+    Registers all repositories, use cases, and BLoCs
+  </Step>
+  <Step title="Provide BLoCs">
+    Makes state managers available throughout the widget tree
+  </Step>
+</Steps>
+
+## File Naming Conventions
+
+<Tabs>
+  <Tab title="Dart Files">
+    - **Snake case**: `product_repository.dart`, `add_product_page.dart`
+    - **Descriptive names**: Include layer/type in name (e.g., `product_bloc.dart`, `product_model.dart`)
+  </Tab>
+  <Tab title="Classes">
+    - **Pascal case**: `ProductBloc`, `ProductRepository`, `AddProductUseCase`
+    - **Suffix with type**: `ProductBloc`, `ProductEvent`, `ProductState`
+  </Tab>
+  <Tab title="Generated Files">
+    - **`.g.dart` suffix**: `product_model.g.dart` (from build_runner)
+    - **Never edit manually**: Regenerate with `dart run build_runner build`
+  </Tab>
+</Tabs>
+
+## Import Organization
+
+Follow these import ordering rules:
+
+```dart
+// 1. Dart SDK imports
+import 'dart:async';
+
+// 2. Flutter framework imports
+import 'package:flutter/material.dart';
+
+// 3. Third-party package imports
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:equatable/equatable.dart';
+import 'package:fpdart/fpdart.dart';
+
+// 4. Local imports (relative paths)
+import '../../domain/entities/product.dart';
+import '../../../../core/error/failure.dart';
+```
+
+## Feature Independence
+
+<Warning>
+Features should be **loosely coupled**. Avoid importing presentation code from other features. Share code through the `core/` directory or domain entities.
+</Warning>
+
+### Valid Cross-Feature Dependencies:
+
+<Check>**Billing feature** uses **Product entities** (domain layer)</Check>
+<Check>**All features** use **core utilities** (printer helper, theme)</Check>
+<Check>**All features** implement **core UseCase interface**</Check>
+
+### Invalid Cross-Feature Dependencies:
+
+<Warning>**Billing BLoC** should NOT import **Product BLoC**</Warning>
+<Warning>**Product page** should NOT import **Shop page widgets**</Warning>
+
+## Code Generation
+
+Some files are auto-generated by `build_runner`:
+
+```bash
+# Generate Hive adapters and JSON serialization
+dart run build_runner build --delete-conflicting-outputs
+```
+
+<Accordion title="What gets generated?">
+- **Hive TypeAdapters** (`.g.dart` files) for model serialization
+- **JSON serialization code** from `json_serializable` annotations
+- Located alongside their source files (e.g., `product_model.g.dart` next to `product_model.dart`)
+</Accordion>
+
+## Directory Navigation Guide
+
+<CardGroup cols={2}>
+  <Card title="Adding a new feature?" icon="plus">
+    Create `features/feature_name/` with `data/`, `domain/`, and `presentation/` subdirectories.
+  </Card>
+  
+  <Card title="Adding shared utilities?" icon="wrench">
+    Place in `core/utils/` if used across features.
+  </Card>
+  
+  <Card title="Creating reusable widgets?" icon="puzzle-piece">
+    Add to `core/widgets/` for global use, or `feature/presentation/widgets/` for feature-specific widgets.
+  </Card>
+  
+  <Card title="Defining app-wide constants?" icon="hashtag">
+    Create `core/constants/` directory for configuration values.
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep features self-contained">
+    Each feature should be independently testable and deployable. Minimize cross-feature dependencies.
+  </Accordion>
+  
+  <Accordion title="Respect layer boundaries">
+    Never import from outer layers into inner layers. Domain should have no framework dependencies.
+  </Accordion>
+  
+  <Accordion title="Use barrel files sparingly">
+    Avoid `index.dart` files that re-export everything. Explicit imports make dependencies clear.
+  </Accordion>
+  
+  <Accordion title="Organize by feature, not by type">
+    Group related code together rather than separating all BLoCs, all repositories, etc.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Clean Architecture" icon="layer-group" href="/development/clean-architecture">
+    Understand the architectural principles and layer separation
+  </Card>
+  <Card title="State Management" icon="arrows-spin" href="/development/state-management">
+    Learn the BLoC pattern implementation
+  </Card>
+  <Card title="Dependency Injection" icon="plug" href="/development/dependency-injection">
+    Explore the service locator setup
+  </Card>
+</CardGroup>

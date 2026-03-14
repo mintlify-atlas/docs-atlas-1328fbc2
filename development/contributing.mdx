@@ -1,0 +1,379 @@
+---
+title: 'Contributing Guidelines'
+description: 'Learn how to contribute to the Flutter Billing App following Clean Architecture principles'
+icon: 'code-pull-request'
+---
+
+## Overview
+
+Welcome to the Flutter Billing App! This project follows industry-standard architectural principles to ensure scalability, separation of concerns, and robust testability. Before contributing, please familiarize yourself with our core guidelines.
+
+<Note>
+  This is a senior-focused project that emphasizes Clean Architecture, immutable state management, and functional programming patterns.
+</Note>
+
+## Core Contribution Rules
+
+### 1. Clean Architecture Boundaries
+
+<Warning>
+  **Strict layer separation is enforced.** Violations will not be accepted.
+</Warning>
+
+The codebase follows a **Feature-First Clean Architecture** pattern with three distinct layers:
+
+<CodeGroup>
+
+```text Feature Structure
+lib/features/<feature_name>/
+├── data/              # Data layer (repositories, models, data sources)
+│   ├── models/        # Hive models & serialization
+│   └── repositories/  # Repository implementations
+├── domain/            # Business logic layer (entities, repositories, use cases)
+│   ├── entities/      # Pure Dart domain entities
+│   ├── repositories/  # Repository interfaces
+│   └── usecases/      # Business logic operations
+└── presentation/      # UI layer (BLoCs, pages, widgets)
+    ├── bloc/          # State management
+    ├── pages/         # Screen implementations
+    └── widgets/       # Feature-specific UI components
+```
+
+</CodeGroup>
+
+#### Layer Responsibilities
+
+<AccordionGroup>
+  <Accordion title="Domain Layer" icon="circle-1">
+    - Contains **pure business logic** with no framework dependencies
+    - Defines entities using `Equatable` for value equality
+    - Declares repository interfaces (contracts)
+    - Implements use cases that orchestrate business operations
+    - **Must not** import anything from `data` or `presentation` layers
+    
+    ```dart Example: Domain Entity
+    import 'package:equatable/equatable.dart';
+    
+    class CartItem extends Equatable {
+      final Product product;
+      final int quantity;
+    
+      const CartItem({
+        required this.product,
+        this.quantity = 1,
+      });
+    
+      double get total => product.price * quantity;
+    
+      CartItem copyWith({
+        Product? product,
+        int? quantity,
+      }) {
+        return CartItem(
+          product: product ?? this.product,
+          quantity: quantity ?? this.quantity,
+        );
+      }
+    
+      @override
+      List<Object> get props => [product, quantity];
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Data Layer" icon="circle-2">
+    - Implements repository interfaces from domain layer
+    - Contains Hive models with `@HiveType` annotations
+    - Handles data persistence and retrieval
+    - Maps between models and domain entities
+    - Returns `Either<Failure, T>` for all operations
+    
+    ```dart Example: Repository Implementation
+    import 'package:fpdart/fpdart.dart';
+    import '../../../../core/error/failure.dart';
+    
+    class ProductRepositoryImpl implements ProductRepository {
+      @override
+      Future<Either<Failure, Product>> getProductByBarcode(String barcode) async {
+        try {
+          final box = HiveDatabase.productBox;
+          final product = box.values.firstWhere(
+            (element) => element.barcode == barcode,
+            orElse: () => throw Exception('Product not found'),
+          );
+          return Right(product);
+        } catch (e) {
+          return Left(CacheFailure(e.toString()));
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Presentation Layer" icon="circle-3">
+    - Contains BLoC state management implementations
+    - Defines UI pages and widgets
+    - Handles user interactions and navigation
+    - Consumes use cases from domain layer
+    - **Must not** directly access data layer
+    
+    ```dart Example: BLoC Event Handler
+    Future<void> _onScanBarcode(
+        ScanBarcodeEvent event, Emitter<BillingState> emit) async {
+      final result = await getProductByBarcodeUseCase(event.barcode);
+      result.fold(
+        (failure) =>
+            emit(state.copyWith(error: 'Product not found: ${event.barcode}')),
+        (product) {
+          add(AddProductToCartEvent(product));
+        },
+      );
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 2. Immutable State Management
+
+<Card title="Critical Rule" icon="lock">
+  All BLoC states **must be immutable** and extend `Equatable`.
+</Card>
+
+Every state class must:
+- Extend `Equatable` for value-based equality
+- Use `const` constructors
+- Provide a `copyWith()` method for state updates
+- Declare all fields as `final`
+- Override `props` getter for equality comparison
+
+```dart Example: Immutable BLoC State
+class BillingState extends Equatable {
+  final List<CartItem> cartItems;
+  final String? error;
+  final bool isPrinting;
+  final bool printSuccess;
+
+  const BillingState({
+    this.cartItems = const [],
+    this.error,
+    this.isPrinting = false,
+    this.printSuccess = false,
+  });
+
+  double get totalAmount => cartItems.fold(0, (sum, item) => sum + item.total);
+
+  BillingState copyWith({
+    List<CartItem>? cartItems,
+    String? error,
+    bool clearError = false,
+    bool? isPrinting,
+    bool? printSuccess,
+  }) {
+    return BillingState(
+      cartItems: cartItems ?? this.cartItems,
+      error: clearError ? null : (error ?? this.error),
+      isPrinting: isPrinting ?? this.isPrinting,
+      printSuccess: printSuccess ?? this.printSuccess,
+    );
+  }
+
+  @override
+  List<Object?> get props => [cartItems, error, isPrinting, printSuccess];
+}
+```
+
+<Tip>
+  When updating lists in state, always create new instances: `List.from(state.items)` instead of mutating existing lists.
+</Tip>
+
+### 3. Error Handling with fpdart
+
+<Warning>
+  **Never throw exceptions directly in the domain layer.** Use the `Either` pattern.
+</Warning>
+
+All repository methods and use cases must return `Either<Failure, T>` from the `fpdart` package:
+
+```dart Use Case Pattern
+import 'package:fpdart/fpdart.dart';
+import '../error/failure.dart';
+
+abstract class UseCase<Result, Params> {
+  Future<Either<Failure, Result>> call(Params params);
+}
+
+class NoParams {}
+```
+
+#### Failure Hierarchy
+
+```dart Core Failure Classes
+import 'package:equatable/equatable.dart';
+
+abstract class Failure extends Equatable {
+  final String message;
+  const Failure(this.message);
+
+  @override
+  List<Object> get props => [message];
+}
+
+class CacheFailure extends Failure {
+  const CacheFailure(String message) : super(message);
+}
+```
+
+<Tip>
+  Use `.fold()` to handle Either results: left side for failures, right side for success.
+</Tip>
+
+## Development Workflow
+
+### Setting Up Your Environment
+
+<Steps>
+  <Step title="Clone and Install">
+    ```bash
+    git clone <repository_url>
+    cd billing_app
+    flutter pub get
+    ```
+  </Step>
+  
+  <Step title="Generate Code">
+    Run code generation for Hive adapters and JSON serialization:
+    ```bash
+    dart run build_runner build --delete-conflicting-outputs
+    ```
+  </Step>
+  
+  <Step title="Run the App">
+    ```bash
+    flutter run
+    ```
+  </Step>
+</Steps>
+
+### Making Changes
+
+<Steps>
+  <Step title="Create Feature Branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+  
+  <Step title="Follow Architecture Layers">
+    When adding new features:
+    1. Start with **domain** entities and repository interfaces
+    2. Implement **data** repositories and models
+    3. Create **use cases** in the domain layer
+    4. Build **presentation** layer (BLoC, pages, widgets)
+  </Step>
+  
+  <Step title="Run Code Generation">
+    After creating or modifying Hive models:
+    ```bash
+    dart run build_runner build --delete-conflicting-outputs
+    ```
+  </Step>
+  
+  <Step title="Test Your Changes">
+    ```bash
+    flutter test
+    flutter analyze
+    ```
+  </Step>
+</Steps>
+
+### Code Generation Requirements
+
+<Info>
+  Run `build_runner` whenever you:
+  - Add new `@HiveType` models
+  - Modify existing Hive model fields
+  - Add JSON serialization annotations
+</Info>
+
+## Dependency Injection
+
+All dependencies are registered using `get_it` in `core/service_locator.dart`.
+
+```dart Registering Dependencies
+import 'package:get_it/get_it.dart';
+
+final sl = GetIt.instance;
+
+void init() {
+  // Use cases
+  sl.registerLazySingleton(() => GetProductByBarcodeUseCase(sl()));
+  
+  // Repositories
+  sl.registerLazySingleton<ProductRepository>(
+    () => ProductRepositoryImpl(),
+  );
+  
+  // BLoCs
+  sl.registerFactory(() => BillingBloc(
+    getProductByBarcodeUseCase: sl(),
+  ));
+}
+```
+
+<Tip>
+  Use `registerFactory` for BLoCs (new instance each time) and `registerLazySingleton` for repositories (single instance).
+</Tip>
+
+## Pull Request Guidelines
+
+<CardGroup cols={2}>
+  <Card title="PR Checklist" icon="list-check">
+    - [ ] Code follows Clean Architecture boundaries
+    - [ ] All states are immutable with Equatable
+    - [ ] Errors use Either pattern (no raw exceptions)
+    - [ ] Code generation completed
+    - [ ] `flutter analyze` passes
+    - [ ] Tests added for new features
+  </Card>
+  
+  <Card title="PR Description" icon="memo">
+    - Describe the feature/fix
+    - List affected layers
+    - Include screenshots for UI changes
+    - Reference related issues
+  </Card>
+</CardGroup>
+
+## Common Pitfalls to Avoid
+
+<Warning>
+  **Do NOT:**
+  - Import `data` layer in `domain` layer
+  - Mutate state objects directly
+  - Throw exceptions in repositories (use Either)
+  - Skip code generation after model changes
+  - Access repositories directly from BLoCs (use use cases)
+</Warning>
+
+<Check>
+  **DO:**
+  - Keep domain layer pure and framework-agnostic
+  - Use `copyWith()` for state updates
+  - Return `Either<Failure, T>` from all data operations
+  - Run build_runner after model changes
+  - Inject dependencies through constructors
+</Check>
+
+## Getting Help
+
+If you have questions about the architecture or contribution process:
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book">
+    Review the [Code Style Guide](/development/code-style) and [Testing Guidelines](/development/testing)
+  </Card>
+  
+  <Card title="Issues" icon="github">
+    Open an issue on GitHub for architectural questions
+  </Card>
+</CardGroup>

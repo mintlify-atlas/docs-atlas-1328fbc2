@@ -1,0 +1,246 @@
+---
+title: Database Setup
+description: Hive local database configuration and usage in the Flutter Billing App
+---
+
+## Overview
+
+The Flutter Billing App uses **Hive** as its local NoSQL database for storing products, shop information, and settings. Hive is a lightweight, fast key-value database written in pure Dart.
+
+## Database Initialization
+
+The `HiveDatabase` class manages all database operations and box management.
+
+### File Location
+
+`lib/core/data/hive_database.dart`
+
+### Initialization Code
+
+```dart lib/core/data/hive_database.dart
+class HiveDatabase {
+  static const String productBoxName = 'products';
+  static const String shopBoxName = 'shop';
+  static const String settingsBoxName = 'settings';
+
+  static Future<void> init() async {
+    await Hive.initFlutter();
+
+    // Register Adapters
+    Hive.registerAdapter(ProductModelAdapter());
+    Hive.registerAdapter(ShopModelAdapter());
+
+    // Open Boxes
+    await Hive.openBox<ProductModel>(productBoxName);
+    await Hive.openBox<ShopModel>(shopBoxName);
+    await Hive.openBox(settingsBoxName); // Generic box for simple key-value
+  }
+}
+```
+
+<Note>
+  The `init()` method must be called before using any Hive boxes, typically in `main()` before `runApp()`.
+</Note>
+
+## Box Management
+
+Hive stores data in "boxes" (similar to tables in SQL). The app uses three main boxes:
+
+| Box Name | Type | Purpose |
+|----------|------|----------|
+| `products` | `Box<ProductModel>` | Stores product inventory |
+| `shop` | `Box<ShopModel>` | Stores shop details |
+| `settings` | `Box` | Generic key-value settings |
+
+### Accessing Boxes
+
+```dart
+// Access boxes through static getters
+final productBox = HiveDatabase.productBox;
+final shopBox = HiveDatabase.shopBox;
+final settingsBox = HiveDatabase.settingsBox;
+```
+
+## Hive Type Adapters
+
+Hive requires type adapters for custom objects. The app uses code generation to create adapters.
+
+### Product Model Example
+
+```dart lib/features/product/data/models/product_model.dart
+import 'package:hive/hive.dart';
+
+part 'product_model.g.dart'; // Generated file
+
+@HiveType(typeId: 0)
+class ProductModel extends Product {
+  @HiveField(0)
+  final String id;
+  
+  @HiveField(1)
+  final String name;
+  
+  @HiveField(2)
+  final String barcode;
+  
+  @HiveField(3)
+  final double price;
+  
+  @HiveField(4)
+  final int stock;
+
+  const ProductModel({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.price,
+    required this.stock,
+  });
+}
+```
+
+<Warning>
+  Each `@HiveType` must have a unique `typeId`. The `@HiveField` index must be unique within each type and should never change after deployment.
+</Warning>
+
+### Shop Model Example
+
+```dart lib/features/shop/data/models/shop_model.dart
+@HiveType(typeId: 1)
+class ShopModel extends Shop {
+  @HiveField(0)
+  final String name;
+  
+  @HiveField(1)
+  final String addressLine1;
+  
+  @HiveField(2)
+  final String addressLine2;
+  
+  @HiveField(3)
+  final String phoneNumber;
+  
+  @HiveField(4)
+  final String upiId;
+  
+  @HiveField(5)
+  final String footerText;
+  // ...
+}
+```
+
+## Generating Adapters
+
+Run the following command to generate Hive type adapters:
+
+```bash
+flutter pub run build_runner build
+```
+
+For continuous development:
+
+```bash
+flutter pub run build_runner watch
+```
+
+## CRUD Operations
+
+Here are common database operations:
+
+### Create/Update (Put)
+
+```dart
+final box = HiveDatabase.productBox;
+final product = ProductModel(/*...*/);
+await box.put(product.id, product); // Uses ID as key
+```
+
+### Read (Get)
+
+```dart
+// Get single item
+final product = box.get(productId);
+
+// Get all items
+final products = box.values.toList();
+
+// Find by condition
+final product = box.values.firstWhere(
+  (element) => element.barcode == scannedBarcode,
+);
+```
+
+### Delete
+
+```dart
+await box.delete(productId);
+```
+
+### Clear All Data
+
+```dart
+await box.clear();
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Type-Safe Boxes" icon="shield-check">
+    Always specify the type when opening boxes: `Box<ProductModel>` instead of just `Box`
+  </Card>
+  
+  <Card title="Never Change Field IDs" icon="lock">
+    Once deployed, never modify `typeId` or `@HiveField` indices as this will corrupt user data
+  </Card>
+  
+  <Card title="Use Entities" icon="layer-group">
+    Keep domain entities separate from Hive models. Use `fromEntity()` and `toEntity()` for conversion
+  </Card>
+  
+  <Card title="Handle Errors" icon="triangle-exclamation">
+    Wrap all Hive operations in try-catch blocks and return `Either<Failure, T>` types
+  </Card>
+</CardGroup>
+
+## Repository Pattern Example
+
+The app uses the repository pattern to abstract database operations:
+
+```dart lib/features/product/data/repositories/product_repository_impl.dart
+class ProductRepositoryImpl implements ProductRepository {
+  @override
+  Future<Either<Failure, List<Product>>> getProducts() async {
+    try {
+      final box = HiveDatabase.productBox;
+      final products = box.values.toList();
+      return Right(products);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
+  
+  @override
+  Future<Either<Failure, void>> addProduct(Product product) async {
+    try {
+      final box = HiveDatabase.productBox;
+      final model = ProductModel.fromEntity(product);
+      await box.put(model.id, model);
+      return const Right(null);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="shield-halved" href="/development/error-handling">
+    Learn how the Either pattern handles database errors
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/development/clean-architecture">
+    Understand how Hive fits into the Clean Architecture layers
+  </Card>
+</CardGroup>

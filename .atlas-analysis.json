@@ -1,0 +1,116 @@
+{
+  "projectType": "saas",
+  "projectName": "Flutter Billing App",
+  "projectDescription": "An offline-first Point of Sale (POS) and billing system for retail shops with barcode scanning and thermal receipt printing.",
+  "theme": "almond",
+  "primaryColor": "#4c4c4c",
+  "lightColor": "#3dcffb",
+  "darkColor": "#085a9c",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "features",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/installation",
+              "getting-started/quickstart",
+              "getting-started/configuration"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/product-management",
+              "features/billing-checkout",
+              "features/barcode-scanning",
+              "features/thermal-printing",
+              "features/shop-settings"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guides/adding-products",
+              "guides/checkout-process",
+              "guides/printer-setup",
+              "guides/managing-inventory"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "development/clean-architecture",
+              "development/project-structure",
+              "development/state-management",
+              "development/dependency-injection"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "development/billing-feature",
+              "development/product-feature",
+              "development/shop-feature",
+              "development/settings-feature"
+            ]
+          },
+          {
+            "group": "Technical Details",
+            "pages": [
+              "development/database",
+              "development/routing",
+              "development/error-handling",
+              "development/hardware-integration"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "development/contributing",
+              "development/code-style",
+              "development/testing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Offline-first architecture with Hive local database",
+    "Barcode/QR code scanning for rapid product lookup",
+    "Bluetooth thermal receipt printing",
+    "Product catalog management with CRUD operations",
+    "Real-time cart management and checkout",
+    "Shop customization and branding",
+    "Clean Architecture with feature-driven design",
+    "BLoC state management pattern"
+  ],
+  "publicApiSurface": [
+    "Product (entity)",
+    "CartItem (entity)",
+    "BillingBloc (state management)",
+    "ProductBloc (state management)",
+    "ShopBloc (state management)",
+    "PrinterBloc (state management)",
+    "ProductRepository (domain)",
+    "ShopRepository (domain)",
+    "HiveDatabase (core data)",
+    "PrinterHelper (utility)",
+    "AppRoutes (navigation)"
+  ]
+}
